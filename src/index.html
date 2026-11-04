@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Alibaab">
+<link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" type="image/png" href="icons/favicon-32.png">
+<meta name="theme-color" content="#171a1d">
+<title>La caverne d'Alibaab</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><img class="logo" src="mascotte-logo.gif" alt="Mascotte"><div>LA CAVERNE <b>D’ALIBAAB</b><small>TRÉSORS DU MATÉRIEL</small></div></div>
+  <div class="top-actions"><span class="local-tag"><i></i> MODE LOCAL</span><button class="btn subtle" id="backupBtn">Sauvegarder</button><button class="btn subtle" id="restoreBtn">Restaurer</button><input id="restoreFile" type="file" accept="application/json" hidden></div>
+</header>
+<div id="installTip" class="install-tip" hidden><span>📲 Sur iPhone : touche <b>Partager</b> puis <b>Sur l’écran d’accueil</b> pour installer l’app.</span><button class="close" id="closeTip" aria-label="Fermer">✕</button></div>
+<main>
+  <section class="hero">
+    <div><p class="eyebrow">INVENTAIRE · PRÊTS · ORGANISATION</p><h1>Tous tes trésors.<br><em>À leur place.</em></h1><p>La caverne de ton parc audiovisuel et informatique.</p><button class="btn primary big" id="addBtn">＋ Ajouter du matériel</button></div>
+    <img class="hero-gif" src="mascotte.gif" alt="Mascotte qui rit derrière sa caméra">
+  </section>
+  <section class="stats">
+    <article><small>ÉQUIPEMENTS</small><strong id="statTotal">0</strong></article>
+    <article><small>EN STOCK</small><strong id="statStock">0</strong></article>
+    <article><small>EMPRUNTÉS / SORTIS</small><strong id="statLoaned">0</strong></article>
+    <article><small>INDISPONIBLES</small><strong id="statUnavailable">0</strong></article>
+  </section>
+  <nav class="tabs">
+    <button class="tab active" data-view="inventory">Mon inventaire</button>
+    <button class="tab" data-view="kits">Mes sacs & kits</button>
+    <button class="tab" data-view="exports">Exports & impressions</button>
+  </nav>
+  <section id="inventoryView">
+    <div class="toolbar"><input id="search" type="search" placeholder="Rechercher nom, marque, série, emplacement…" enterkeyhint="search"><select id="statusFilter"><option value="all">Tous les états</option><option value="stock">En stock</option><option value="loaned">Emprunté / sorti</option><option value="unavailable">Indisponible</option></select><select id="categoryFilter"><option value="all">Toutes catégories</option></select><button class="btn subtle" id="csvBtn">Exporter CSV</button></div>
+    <div class="section-head"><h2>Le matériel</h2><span id="count" class="muted">0 équipement</span></div>
+    <div id="inventory" class="inventory"><div class="empty">Ton inventaire est vide. Ajoute ton premier équipement.</div></div>
+  </section>
+  <section id="kitsView" hidden>
+    <div class="section-head"><div><h2>Sacs & kits</h2><p class="muted">Regroupe plusieurs équipements dans une mallette, un sac ou un kit de tournage.</p></div><button class="btn primary" id="addKitBtn">＋ Créer un kit</button></div>
+    <div id="kits" class="inventory"></div>
+  </section>
+  <section id="exportsView" hidden>
+    <div class="section-head"><div><h2>Exports & impressions</h2><p class="muted">Prépare tes fiches d'inventaire et tes sauvegardes.</p></div></div>
+    <div class="export-grid">
+      <article class="panel"><h3>Inventaire complet</h3><p>Imprime ou enregistre un PDF récapitulatif de tous les équipements.</p><button class="btn primary" id="printAllBtn">Imprimer l'inventaire</button></article>
+      <article class="panel"><h3>Une fiche PDF par objet</h3><p>Ouvre une impression avec une page dédiée par équipement. Choisis « Enregistrer au format PDF » dans la fenêtre d'impression.</p><button class="btn primary" id="printEachBtn">Préparer les fiches individuelles</button></article>
+      <article class="panel"><h3>CSV pour Excel & Notion</h3><p>Exporte les données structurées pour créer une base de données Notion, puis joins les fiches PDF si besoin.</p><button class="btn primary" id="csvBtn2">Télécharger le CSV</button></article>
+      <article class="panel"><h3>Sauvegarde complète</h3><p>Conserve une copie JSON de tes fiches, photos et kits. Tu peux la restaurer sur un autre appareil (iPhone ↔ Mac).</p><button class="btn primary" id="backupBtn2">Créer une sauvegarde</button></article>
+    </div>
+    <p class="note">Astuce Notion : importe le CSV pour créer les lignes de ta base de données. Les PDF servent de fiches détaillées à joindre aux entrées ; l'import d'un PDF seul ne crée pas automatiquement une ligne Notion.</p>
+  </section>
+</main>
+<footer><span>LA CAVERNE D’ALIBAAB</span><span>Fonctionne hors-ligne · Données conservées sur cet appareil</span></footer>
+
+<dialog id="itemDialog"><form id="itemForm" class="dialog-form">
+  <div class="dialog-head"><div><p class="eyebrow">FICHE ÉQUIPEMENT</p><h2 id="dialogTitle">Ajouter du matériel</h2></div><button type="button" class="close" id="closeItem">✕</button></div>
+  <div class="photo-row"><label class="photo-box">＋<span>Photo du matériel</span><input id="photo" type="file" accept="image/*" capture="environment"></label><img id="photoPreview" hidden alt="Aperçu"><p class="muted">La photo reste sur cet appareil. Privilégie une image nette de la plaque signalétique pour retrouver le modèle et le numéro de série.</p></div>
+  <div class="form-grid">
+    <label>Nom du matériel *<input name="name" required placeholder="Caméra principale"></label>
+    <label>Catégorie<select name="category" id="category">
+      <option>Caméras & vidéo</option><option>Photo</option><option>Objectifs</option><option>Son & microphones</option><option>Enceintes</option><option>Éclairage</option><option>Ordinateurs</option><option>Informatique & réseaux</option><option>Écrans & périphériques</option><option>Stockage</option><option>Câbles & connectiques</option><option>Trépieds & supports</option><option>Sacs & mallettes</option><option>Accessoires</option><option>Autre</option>
+    </select></label>
+    <label>Marque<input name="brand" placeholder="Sony, Canon, Apple…"></label><label>Modèle<input name="model" placeholder="FX3, A7 IV…"></label>
+    <label>Numéro de série<input name="serial" placeholder="Numéro inscrit sur l'appareil"></label><label>Quantité<input name="quantity" type="number" min="1" value="1"></label>
+    <label>État<select name="status"><option value="stock">En stock</option><option value="loaned">Emprunté / sorti</option><option value="unavailable">Indisponible</option></select></label>
+    <label>Motif si indisponible<select name="reason"><option value="">—</option><option value="repair">En réparation</option><option value="lost">Perdu</option><option value="out_of_service">Hors service</option></select></label>
+    <label>Emplacement<input name="location" placeholder="Studio, armoire A, sac caméra 01…"></label><label>Personne / détenteur<input name="holder" placeholder="Nom si le matériel est sorti"></label>
+    <label>Date de sortie<input name="loanDate" type="date"></label><label>Retour prévu<input name="dueDate" type="date"></label>
+    <label>Prix d'achat (€)<input name="price" type="number" min="0" step="0.01"></label><label>Date d'achat<input name="purchaseDate" type="date"></label>
+    <label>Fin de garantie<input name="warranty" type="date"></label><label>État physique<select name="condition"><option>Très bon</option><option>Bon</option><option>Usé</option><option>À réparer</option></select></label>
+    <label class="wide">Notes<textarea name="notes" rows="3" placeholder="Accessoires, observations, entretien…"></textarea></label>
+  </div>
+  <div class="dialog-actions"><button type="button" class="btn subtle" id="cancelItem">Annuler</button><button class="btn primary" type="submit">Enregistrer la fiche</button></div>
+</form></dialog>
+
+<dialog id="kitDialog"><form id="kitForm" class="dialog-form"><div class="dialog-head"><div><p class="eyebrow">CONTENANT</p><h2>Créer un sac ou un kit</h2></div><button type="button" class="close" id="closeKit">✕</button></div><div class="form-grid"><label>Nom du kit *<input name="name" required placeholder="Kit tournage A"></label><label>Emplacement<input name="location" placeholder="Étagère, véhicule…"></label><label class="wide">Équipements<select name="items" id="kitItems" multiple size="7"></select><span class="muted">Maintiens Ctrl (Windows) ou ⌘ (Mac) pour sélectionner plusieurs objets.</span></label><label class="wide">Description<textarea name="description" rows="2"></textarea></label></div><div class="dialog-actions"><button type="button" class="btn subtle" id="cancelKit">Annuler</button><button class="btn primary" type="submit">Créer le kit</button></div></form></dialog>
+<dialog id="qrDialog"><div class="dialog-form qr-content"><div class="dialog-head"><div><p class="eyebrow">IDENTIFICATION</p><h2 id="qrTitle">QR code</h2></div><button class="close" id="closeQr">✕</button></div><img id="qrImage" alt="QR code"><p class="muted">Scanne ce code avec l’appareil photo de l’iPhone : la fiche s’ouvre directement dans l’app.</p><button class="btn primary" id="printQr">Imprimer l'étiquette</button></div></dialog>
+<script src="qr.js"></script>
+<script src="app.js"></script>
+</body></html>
