@@ -8,9 +8,9 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder",
-    "dist:mac": "electron-builder --mac dmg",
-    "dist:win": "electron-builder --win nsis",
-    "dist:all": "electron-builder --mac dmg --win nsis"
+    "dist:mac": "electron-builder --mac --publish never",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:all": "electron-builder --mac --win --publish never"
   },
   "devDependencies": {
     "electron": "^34.3.0",
@@ -29,16 +29,30 @@
     ],
     "mac": {
       "category": "public.app-category.productivity",
+      "icon": "assets/icon.png",
       "target": [
-        "dmg"
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
       ],
-      "icon": "assets/icon.png"
+      "artifactName": "La-caverne-dAlibaab-${version}-Mac-${arch}.${ext}",
+      "identity": null
     },
     "win": {
+      "icon": "assets/icon.png",
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
-      "icon": "assets/icon.png"
+      "artifactName": "La-caverne-dAlibaab-${version}-Windows-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,

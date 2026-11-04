@@ -11,4 +11,4 @@
 2. Historique des mouvements et des prêts.
 3. Synchronisation facultative iPhone ↔ Mac (Supabase ou iCloud), à n'annoncer qu'une fois testée.
 4. OCR de la plaque signalétique pour pré-remplir marque, modèle, série (avec confirmation).
-5. Tester les installateurs sur Mac et Windows.
+5. Signer l'app (Apple Developer + certificat Windows) pour supprimer les avertissements.

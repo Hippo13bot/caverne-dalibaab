@@ -28,14 +28,27 @@ Inventaire de matériel audiovisuel, photo, son, informatique et accessoires. **
 
 > ⚠️ Les données restent **sur chaque appareil** (iPhone ≠ Mac). Pour les transférer : **Sauvegarder** (sur iPhone, la feuille de partage propose AirDrop, Fichiers, Mail…) puis **Restaurer** sur l'autre appareil. Sur iPhone, fais ta première saisie **après** avoir installé l'app sur l'écran d'accueil : Safari et l'app installée ont chacun leur propre stockage.
 
-## Développer l'app de bureau
+## Compiler l'app Mac et Windows avec GitHub Actions
+Rien à installer sur ton ordinateur : GitHub compile pour toi.
+1. Pousse le dossier sur GitHub (branche `main`).
+2. **Test rapide** : onglet **Actions** ▸ « Compiler l'app Mac et Windows » ▸ **Run workflow**. Au bout de quelques minutes, les installateurs sont en bas de la page du run (section *Artifacts*).
+3. **Version officielle** : crée un tag, GitHub publie alors une **Release** avec les fichiers à télécharger.
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+Fichiers produits : `…-Mac-arm64.dmg` (Mac récents M1 à M4), `…-Mac-x64.dmg` (Mac Intel), `…-Windows-Setup.exe`.
+
+**Avertissements au premier lancement** (l'app n'est pas signée, la signature coûte un abonnement Apple/Microsoft) :
+- **Mac** : ouvre le `.dmg`, glisse l'app dans Applications, puis **clic droit ▸ Ouvrir ▸ Ouvrir**. Si macOS la déclare « endommagée » : `xattr -cr "/Applications/La caverne d'Alibaab.app"` dans le Terminal.
+- **Windows** : SmartScreen affiche « Windows a protégé votre ordinateur » : **Informations complémentaires ▸ Exécuter quand même**.
+
+## Développer en local (facultatif)
 Prérequis : Node.js 20+.
 ```bash
 npm install
 npm start
-npm run dist:mac    # ou dist:win
 ```
-Le workflow `build.yml` construit les installateurs à chaque tag `v*`.
 
 ## Tester la version web en local
 ```bash
