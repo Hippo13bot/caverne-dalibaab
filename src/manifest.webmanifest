@@ -1,7 +1,7 @@
 {
   "name": "La caverne d'Alibaab",
   "short_name": "Alibaab",
-  "description": "Inventaire de matériel audiovisuel, photo, son et informatique. Fonctionne hors-ligne.",
+  "description": "Inventaire de matériel audiovisuel, photo, son et informatique. Fonctionne hors-ligne. Scanner QR, locations de tournage.",
   "lang": "fr",
   "start_url": "./index.html",
   "scope": "./",

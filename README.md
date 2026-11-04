@@ -17,7 +17,11 @@ Inventaire de matériel audiovisuel, photo, son, informatique et accessoires. **
 - 100 % local : aucun compte, aucun serveur, aucune connexion requise.
 - Fiches avec photo (appareil photo de l'iPhone directement), catégories, série, quantité, statut, emprunteur, dates, emplacement, prix, garantie, notes.
 - Sacs et kits, QR code par fiche, export CSV (Notion/Excel), sauvegarde/restauration JSON, impression et fiches PDF.
+- **Scanners** : liste de matériel à prévoir (scénarios de tournage), entrées et sorties de matériel ; le QR code de garantie devient le scanner de la fiche. États **DÉPART** (à valider avant partir) et **RETOUR** (qui change le statut de l'objet).
+- **Locations de tournage** : contrat avec nom, prénom, contact, dates de début et de fin, liste de matériel pré-réservée ; validation + impression PDF.
+- **Gestion des tournages** : ajout de tournages avec leurs besoins en matériel.
 - Stockage dans **IndexedDB** (beaucoup plus d'espace que localStorage : indispensable pour les photos sur iPhone). Les anciennes données localStorage sont migrées automatiquement.
+- **Photographie** : prendre en photo un objet pour un pré-remplissage (recherche par OCR, réseau requis).
 - **QR code** : sur la version web, il contient un lien `…/index.html#item=ID`. Le scanner avec l'appareil photo de l'iPhone ouvre la fiche dans l'app.
 
 ## Mettre la version iPhone en ligne (GitHub Pages)
