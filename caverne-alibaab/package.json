@@ -1,0 +1,64 @@
+{
+  "name": "caverne-dalibaab",
+  "version": "1.2.0",
+  "description": "La caverne d'Alibaab : inventaire de matériel audiovisuel et informatique (bureau + iPhone)",
+  "main": "src/main.js",
+  "author": "La caverne d'Alibaab",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac --publish never",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:all": "electron-builder --mac --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "^34.3.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "fr.lacaverne.dalibaab",
+    "productName": "La caverne d'Alibaab",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "La-caverne-dAlibaab-${version}-Mac-${arch}.${ext}",
+      "identity": null
+    },
+    "win": {
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "La-caverne-dAlibaab-${version}-Windows-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
