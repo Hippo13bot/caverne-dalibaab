@@ -7,7 +7,10 @@ const STORES = {
   movements: 'caverne_alibaab_movements_v1'
 };
 let items = [], kits = [], travel = [], loans = [], movements = [];
-let editingId = null, photoData = '';
+let editingId = null, editingTravelId = null, editingLoanId = null, photoData = '';
+let stateUpdatedAt = new Date().toISOString();
+let departureQueue = [];
+let lastScanValue = '', lastScanAt = 0;
 const statusNames = { stock: 'En stock', loaned: 'Emprunté / sorti', unavailable: 'Indisponible' };
 const reasonNames = { repair: 'En réparation', lost: 'Perdu', out_of_service: 'Hors service' };
 const movementNames = { entry: 'Entrée', exit: 'Sortie', return: 'Retour', departure: 'Départ' };
@@ -23,8 +26,9 @@ function openFromHash(){
 }
 function saveAll(){ persistAll(); render(); }
 function persistAll(){
-  idb.set('state.items', items).catch(()=>alert("Enregistrement impossible : espace de stockage plein ? Fais une sauvegarde."));
-  idb.set('state.kits', kits); idb.set('state.travel', travel); idb.set('state.loans', loans); idb.set('state.movements', movements);
+  stateUpdatedAt=new Date().toISOString(); const state={items,kits,travel,loans,movements,updatedAt:stateUpdatedAt};
+  idb.set('state',state).catch(()=>alert("Enregistrement impossible : espace de stockage plein ? Fais une sauvegarde."));
+  try { localStorage.setItem('caverne_alibaab_last_update',state.updatedAt); } catch(e) {}
 }
 
 // ---------- IndexedDB ----------
@@ -41,16 +45,16 @@ const idb = {
     await idb.open();
     let st = await idb.get('state');
     if (!st) {
-      const oldItems = JSON.parse(localStorage.getItem(STORES.items) || '[]');
-      const oldKits  = JSON.parse(localStorage.getItem(STORES.kits) || '[]');
-      st = { items: oldItems, kits: oldKits, travel: [], loans: [], movements: [] };
+      const oldItems = await idb.get('state.items') || JSON.parse(localStorage.getItem(STORES.items) || '[]');
+      const oldKits  = await idb.get('state.kits') || JSON.parse(localStorage.getItem(STORES.kits) || '[]');
+      st = { items: oldItems, kits: oldKits, travel: await idb.get('state.travel')||[], loans: await idb.get('state.loans')||[], movements: await idb.get('state.movements')||[] };
       if (oldItems.length || oldKits.length) await idb.set('state', st);
     }
     items = st.items || [];
     kits  = st.kits || [];
     travel = st.travel || [];
     loans = st.loans || [];
-    movements = st.movements || [];
+    movements = st.movements || []; stateUpdatedAt=st.updatedAt||stateUpdatedAt;
   } catch (e) { alert("Le stockage de l'appareil est indisponible (Navigation privée ?). Les données ne seront pas conservées."); }
   window.__bootTrace = [];
   window.__bootTrace.push('start');
@@ -97,7 +101,7 @@ function renderKits(){
 function renderTravel(){
   const list=$('#travelList');
   if(!travel.length){ list.innerHTML='<p class="muted small">Aucun scénario. Crée un « mat d\'emats » pour te préparer une journée.</p>'; return; }
-  list.innerHTML = travel.map(t=>`<article class="item-card travel-card"><div class="item-meta"><span class="pill">TOURNAGE</span><span class="pill ${esc(t.status||'draft')}">${esc(travelStatusNames[t.status||'draft'])}</span></div><div><h3>${esc(t.name)}</h3><p>${esc(t.notes||'')}</p></div><div class="card-actions"><button class="btn subtle" data-travel-edit="${t.id}">Éditer</button><button class="btn subtle" data-travel-delete="${t.id}">Supprimer</button></div></article>`).join('');
+  list.innerHTML = travel.map(t=>`<article class="item-card travel-card"><div class="item-meta"><span class="pill">TOURNAGE</span><span class="pill ${esc(t.status||'draft')}">${esc(travelStatusNames[t.status||'draft'])}</span></div><div><h3>${esc(t.name)}</h3><p>${esc(t.notes||'')}</p><p class="muted small">${(t.needs||[]).map(n=>esc(n.label)+' ×'+(n.qty||1)).join(' · ')||'Aucun besoin renseigné'}</p></div><div class="card-actions"><button class="btn subtle" data-travel-qr="${t.id}">QR scénario</button><button class="btn subtle" data-travel-edit="${t.id}">Éditer</button><button class="btn subtle" data-travel-delete="${t.id}">Supprimer</button></div></article>`).join('');
 }
 function renderLoans(){
   const list=$('#loanList');
@@ -123,7 +127,7 @@ function renderLoans(){
 }
 function renderMovements(){
   const list=$('#movementList');
-  const d=$('#movementDate').value;
+  const d=$('#movementDate')?.value||'';
   const day = d ? movements.filter(m=>m.date===d) : movements;
   if(!day.length){ list.innerHTML='<p class="muted small">Aucun mouvement.</p>'; return; }
   list.innerHTML = day.map(m=>`
@@ -136,10 +140,10 @@ function renderMovements(){
 
 // ---------- dialogs: travel ----------
 function initTravelForm(){
-  $('#addTravelBtn').onclick=()=>{ renderTravel(); resetTravel(); $('#travelDialog').showModal(); };
+  $('#addTravelBtn').onclick=()=>{ editingTravelId=null; $('#travelDialogTitle').textContent='Nouveau scénario'; resetTravel(); $('#travelDialog').showModal(); };
   $('#closeTravel').onclick=$('#cancelTravel').onclick=()=>$('#travelDialog').close();
-  $('#travelForm').onsubmit=e=>{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); d.needs=[]; const rows=$('#travelItems').querySelectorAll('.travel-row'); if(rows.length){ rows.forEach(r=>{ const label=r.querySelector('.travel-label').value.trim(); if(label){ d.needs.push({ label, qty: Math.max(1, Number(r.querySelector('.travel-qty').value)||1), notes: (r.querySelector('.travel-notes')||'').value.trim() }); } }); }
-  d.id=uid(); d.status='draft'; travel.push(d); saveAll(); $('#travelDialog').close(); renderTravel(); };
+  $('#travelForm').onsubmit=e=>{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); d.needs=[]; const rows=$('#travelItems').querySelectorAll('.travel-row'); rows.forEach(r=>{ const label=r.querySelector('.travel-label').value.trim(); if(label){ d.needs.push({ label, qty: Math.max(1, Number(r.querySelector('.travel-qty').value)||1), notes: r.querySelector('.travel-notes').value.trim() }); } });
+  const old=travel.find(x=>x.id===editingTravelId); d.id=editingTravelId||uid(); d.status=old?.status||'draft'; travel=old?travel.map(x=>x.id===d.id?{...old,...d}:x):[...travel,d]; editingTravelId=null; saveAll(); $('#travelDialog').close(); renderTravel(); };
   $('#addTravelItem').onclick=()=>{ const list=document.getElementById('travelItems'); const row=document.createElement('div'); row.className='travel-row'; row.innerHTML=`<input class="travel-label" placeholder="Ex. : Canon FX3 + 2 objectifs" style="flex:1"><input class="travel-qty" type="number" min="1" value="1" style="width:80px"><input class="travel-notes" placeholder="Requis / commentaire" style="width:220px"><button type="button" class="btn subtle small" id="removeTravelItem">Supprimer</button>`; list.appendChild(row); row.querySelector('#removeTravelItem').onclick=()=>row.remove(); };
 }
 function resetTravel(){ $('#travelForm').reset(); $('#travelItems').innerHTML=''; }
@@ -150,28 +154,33 @@ function fillTravelRows(travelFromDb){
 
 // ---------- dialogs: loan ----------
 function initLoanForm(){
-  $('#addLoanBtn').onclick=()=>{ renderLoans(); resetLoan(); $('#loanDialog').showModal(); };
+  $('#addLoanBtn').onclick=()=>{ editingLoanId=null; $('#loanDialogTitle').textContent='Nouveau contrat'; refreshLoanOptions(); renderLoans(); resetLoan(); $('#loanDialog').showModal(); };
   $('#closeLoan').onclick=$('#cancelLoan').onclick=()=>$('#loanDialog').close();
-  $('#loanForm').onsubmit=e=>{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); d.items=[]; const rows=$('#loanRows').querySelectorAll('.loan-row'); if(rows.length){ rows.forEach(r=>{ const name=r.querySelector('.loan-name').value.trim(); if(name){ d.items.push({ name, brand:'', model:'', qty: Math.max(1,Number(r.querySelector('.loan-qty').value)||1), status:'assigned' }); } }); }
-  d.id=uid(); d.status='draft'; loans.push(d); saveAll(); $('#loanDialog').close(); renderLoans(); };
+  $('#loanForm').onsubmit=e=>{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); d.items=[]; const rows=$('#loanRows').querySelectorAll('.loan-row'); rows.forEach(r=>{ const itemId=r.dataset.itemId||''; const obj=items.find(x=>x.id===itemId); const name=r.querySelector('.loan-name').value.trim(); if(name){ d.items.push({ itemId, name:obj?.name||name, brand:obj?.brand||'', model:obj?.model||'', qty:Math.max(1,Number(r.querySelector('.loan-qty').value)||1), status:'assigned' }); } });
+  const old=loans.find(x=>x.id===editingLoanId); d.id=editingLoanId||uid(); d.status=old?.status||'draft'; d.createdAt=old?.createdAt||new Date().toISOString(); loans=old?loans.map(x=>x.id===d.id?{...old,...d}:x):[...loans,d]; editingLoanId=null; saveAll(); $('#loanDialog').close(); renderLoans(); };
   $('#itemForm').onsubmit=e=>{
-    try{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); if(photoData) d.photo=photoData; d.id=uid(); d.status=d.status||'stock'; items.push(d); saveAll(); $('#itemDialog').close(); render(); }
-    catch(err){ console.error('itemForm submit ERR', err); }
+    try{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); if(photoData) d.photo=photoData; const id=editingId||uid(); const old=items.find(x=>x.id===id); d.id=id; d.status=d.status||'stock'; if(!d.externalQr&&old?.externalQr)d.externalQr=old.externalQr; if(!d.photo&&old?.photo)d.photo=old.photo; items=old?items.map(x=>x.id===id?{...x,...d}:x):[...items,d]; editingId=null; photoData=''; saveAll(); $('#itemDialog').close(); render(); refreshLoanOptions(); }
+    catch(err){ console.error('itemForm submit ERR',err); alert('Impossible d’enregistrer cette fiche : '+err.message); }
   };
+  $('#closeItem').onclick=$('#cancelItem').onclick=()=>{editingId=null;$('#itemDialog').close();}; $('#itemDialog').addEventListener('close',()=>{editingId=null;});
+  $('#addKitBtn').onclick=()=>{ $('#kitForm').reset(); refreshKitOptions(); $('#kitDialog').showModal(); };
+  $('#closeKit').onclick=$('#cancelKit').onclick=()=>$('#kitDialog').close();
+  $('#kitForm').onsubmit=e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.currentTarget).entries());const selected=[...$('#kitItems').selectedOptions].map(o=>o.value);kits.push({id:uid(),name:d.name,location:d.location||'',description:d.description||'',items:selected});saveAll();$('#kitDialog').close();};
   // dynamic rows
-  const source = ()=> items.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} — ${esc(x.model||x.category)}</option>`).join('');
-  $('#loanItemsSelect').innerHTML = source();
-  // placeholder toggle: we keep the static select but will populate via JS at open; keep both selectors
+  refreshLoanOptions(); $('#loanItemsSelect').onchange=fillLoanRows; $('#loanRows').innerHTML='';
 }
+function refreshLoanOptions(){ const sel=$('#loanItemsSelect'); if(!sel)return; const selected=new Set([...sel.selectedOptions].map(o=>o.value)); sel.innerHTML=items.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} — ${esc(x.model||x.category||'')}</option>`).join(''); [...sel.options].forEach(o=>o.selected=selected.has(o.value)); }
+function refreshKitOptions(){ const sel=$('#kitItems'); if(sel)sel.innerHTML=items.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} — ${esc(x.model||x.category||'')}</option>`).join(''); }
+function openEdit(id){ const x=items.find(i=>i.id===id); if(!x)return; editingId=id; photoData=''; resetForm(); $('#dialogTitle').textContent='Modifier le matériel'; for(const [k,v] of Object.entries(x)){const el=$('#itemForm').elements.namedItem(k);if(el&&el.type!=='file')el.value=v??'';} if(x.photo){$('#photoPreview').src=x.photo;$('#photoPreview').hidden=false;} $('#itemDialog').showModal(); }
 function resetLoan(){ $('#loanForm').reset(); $('#loanRows').innerHTML=''; }
-function resetForm(){ $('#itemForm').reset(); $('#photoPreview').hidden=true; }
+function resetForm(){ $('#itemForm').reset(); $('#photoPreview').hidden=true; photoData=''; }
 function fillLoanRows(){
   const list=$('#loanRows'); list.innerHTML='';
   const sel=$(`#loanItemsSelect`);
   if(!sel.options.length){ list.innerHTML='<p class="muted small">Ajoute du matériel dans l\'inventaire.</p>'; return; }
   for(const o of sel.options){
     if(o.selected){
-      const row=document.createElement('div'); row.className='loan-row';
+      const row=document.createElement('div'); row.className='loan-row'; row.dataset.itemId=o.value;
       row.innerHTML=`<input class="loan-name" value="${esc(o.text)}" disabled style="flex:1"><input class="loan-qty" type="number" min="1" value="1" style="width:80px"><button type="button" class="btn subtle small" id="removeLoanRow">✕</button>`;
       list.appendChild(row);
       row.querySelector('#removeLoanRow').onclick=()=>{ row.remove(); renumberLoanSelected(); };
@@ -179,6 +188,9 @@ function fillLoanRows(){
   }
 }
 function renumberLoanSelected(){ /* pas besoin */ }
+
+function qrLink(id){ return `${location.origin==='null'?'caverne-alibaab:item':location.origin+location.pathname+'#item'}=${encodeURIComponent(id)}`; }
+function makeQR(value){ const qr=new QRCodeLib(0,0); qr.addData(String(value)); qr.make(); const count=qr.getModuleCount(), scale=6, margin=4, canvas=document.createElement('canvas'); canvas.width=canvas.height=(count+margin*2)*scale; const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#111';for(let r=0;r<count;r++)for(let c=0;c<count;c++)if(qr.isDark(r,c))ctx.fillRect((c+margin)*scale,(r+margin)*scale,scale,scale);return canvas.toDataURL('image/png'); }
 
 // Attach form open/close to public buttons
 document.addEventListener('click', async (e)=>{
@@ -189,13 +201,17 @@ document.addEventListener('click', async (e)=>{
   const prl=e.target.closest('[data-printloan]'); if(prl){ const l=loans.find(x=>x.id===prl.dataset.printloan); if(l) printLoan(l); return; }
   const kd=e.target.closest('[data-kit-delete]'); if(kd){ if(confirm('Supprimer ce kit ?')){ kits=kits.filter(k=>k.id!==kd.dataset.kitDelete); saveAll(); } return; }
   const pk=e.target.closest('[data-printkit]'); if(pk){ const k=kits.find(x=>x.id===pk.dataset.printkit); if(k) printKit(k); return; }
-  const td=e.target.closest('[data-travel-edit]'); if(td){ const t=travel.find(x=>x.id===td.dataset.travelEdit); if(t){ resetTravel(); $('#travelDialog').showModal(); } return; }
+  const tq=e.target.closest('[data-travel-qr]'); if(tq){const t=travel.find(x=>x.id===tq.dataset.travelQr);if(t){$('#qrTitle').textContent='Scénario · '+t.name;$('#qrImage').src=makeQR('caverne-alibaab:travel='+t.id);$('#qrDialog').showModal();}return;}
+  const td=e.target.closest('[data-travel-edit]'); if(td){ const t=travel.find(x=>x.id===td.dataset.travelEdit); if(t){ editingTravelId=t.id; resetTravel(); $('#travelDialogTitle').textContent='Modifier le scénario'; $('#travelForm').elements.name.value=t.name||''; $('#travelForm').elements.notes.value=t.notes||''; (t.needs||[]).forEach(n=>{ $('#addTravelItem').click(); const r=$('#travelItems').lastElementChild; r.querySelector('.travel-label').value=n.label||''; r.querySelector('.travel-qty').value=n.qty||1; r.querySelector('.travel-notes').value=n.notes||''; }); $('#travelDialog').showModal(); } return; }
   const rev=e.target.closest('[data-travel-delete]'); if(rev){ if(confirm('Supprimer ce scénario ?')){ travel=travel.filter(x=>x.id!==rev.dataset.travelDelete); saveAll(); } return; }
-  const ld=e.target.closest('[data-loan-edit]'); if(ld){ const l=loans.find(x=>x.id===ld.dataset.loanEdit); if(l){ resetLoan(); fillLoanRows(); $('#loanDialog').showModal(); } return; }
+  const ld=e.target.closest('[data-loan-edit]'); if(ld){ const l=loans.find(x=>x.id===ld.dataset.loanEdit); if(l){ editingLoanId=l.id; refreshLoanOptions(); resetLoan(); $('#loanDialogTitle').textContent='Modifier la location'; for(const k of ['client','firstname','contact','startDate','endDate','objectif']) $('#loanForm').elements[k].value=l[k]||''; const sel=$('#loanItemsSelect'); const mapped=(l.items||[]).map(it=>({...it,itemId:it.itemId||items.find(x=>x.name===it.name)?.id||''})); [...sel.options].forEach(o=>o.selected=mapped.some(it=>it.itemId===o.value)); fillLoanRows(); mapped.forEach(it=>{let r=[...$('#loanRows').children].find(row=>row.dataset.itemId===it.itemId);if(!r){r=document.createElement('div');r.className='loan-row';r.dataset.itemId=it.itemId||'';r.innerHTML=`<input class="loan-name" value="${esc(it.name||'Matériel') }" ${it.itemId?'disabled':''} style="flex:1"><input class="loan-qty" type="number" min="1" value="1" style="width:80px"><button type="button" class="btn subtle small">✕</button>`;$('#loanRows').appendChild(r);r.querySelector('button').onclick=()=>r.remove();}r.querySelector('.loan-qty').value=it.qty||1;}); $('#loanDialog').showModal(); } return; }
   const lv=e.target.closest('[data-loan-delete]'); if(lv){ if(confirm('Supprimer cette location ?')){ loans=loans.filter(x=>x.id!==lv.dataset.loanDelete); saveAll(); } return; }
   const dp=e.target.closest('[data-loan-depart]'); if(dp){ const l=loans.find(x=>x.id===dp.dataset.loanDepart); if(l){ populateDeparture(l); $('#departureDialog').showModal(); } return; }
   const lp=e.target.closest('[data-loan-print]'); if(lp){ const l=loans.find(x=>x.id===lp.dataset.loanPrint); if(l) printLoan(l); return; }
 });
+
+$('#closeQR')?.addEventListener('click',()=>$('#qrDialog').close());
+$('#printQRBtn')?.addEventListener('click',()=>{const w=window.open('','_blank');if(!w)return alert('Autorise les fenêtres surgissantes pour imprimer le QR.');w.document.write(`<!doctype html><html><head><title>${esc($('#qrTitle').textContent)}</title><style>body{font-family:Arial;text-align:center;padding:30px}img{width:300px;height:300px;object-fit:contain}h2{font-size:20px}</style></head><body><h2>${esc($('#qrTitle').textContent)}</h2><img src="${$('#qrImage').src}"><script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();});
 
 // ---------- tabs ----------
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
@@ -203,10 +219,11 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   $('#inventoryView').hidden=t.dataset.view!=='inventory';
   $('#kitsView').hidden=t.dataset.view!=='kits';
   $('#tournoisView').hidden=t.dataset.view!=='tournois';
-  $('#scannerView').hidden=t.dataset.view!=='scanner';
+  $('#scannerView').hidden=t.dataset.view!=='scanner'; if(t.dataset.view!=='scanner'&&scannerActive)stopScanner();
   $('#exportsView').hidden=t.dataset.view!=='exports';
 });
 $('#addBtn').onclick=()=>{ resetForm(); $('#itemDialog').showModal(); }
+$('#search').addEventListener('input',renderInventory);$('#statusFilter').addEventListener('change',renderInventory);$('#categoryFilter').addEventListener('change',renderInventory);$('#movementDate').addEventListener('change',renderMovements);
 
 // ---------- exports ----------
 $('#csvBtn').onclick=$('#csvBtn2').onclick=csv;
@@ -229,7 +246,7 @@ function printItems(list,individual=false){
 function printLoan(loan){
   // Fiche de location : en-tête + équipement préparé avec statut
   const itemsList = loan.items?.map(it=>`<tr><th>${esc(it.name||it.itemId)}</th><td>${it.qty||1}</td><td>${esc(loanItemStatusNames[it.status])}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">Aucun équipement préparé.</td></tr>';
-  const html=`<article class="sheet"><header><h1>LA CAVERNE D’ALIBAAB</h1><b>LOCATION DE TOURNAGE</b></header>
+  const html=`<article class="sheet"><header><h1>LA CAVERNE D’ALIBAAB</h1><b>CONTRAT DE LOCATION / MISE À DISPOSITION</b></header>
     <table class="loan-meta">
       <tr><th>Client</th><td>${esc(loan.client||'—')}</td></tr>
       <tr><th>Prénom</th><td>${esc(loan.firstname||'—')}</td></tr>
@@ -240,8 +257,8 @@ function printLoan(loan){
       <tr><th>Statut</th><td>${esc(loanStatusNames[loan.status]||'—')}</td></tr>
     </table>
     <table class="loan-items"><tr><th>Équipement</th><th>Qté</th><th>État</th></tr>${itemsList}</table>
-    <p class="serial">Identifiant : ${esc(loan.id)}</p>
-    <p class="muted small">${esc(loan.notes||'')}</p>
+    <p class="muted small">${esc(loan.notes||'')}</p><div class="signatures"><div>Signature du loueur<br><br>Date :</div><div>Signature du bénéficiaire<br><br>Date :</div></div>
+    <p class="serial">Contrat : ${esc(loan.id)}</p>
   </article>`;
   const w=window.open('','_blank'); w.document.write(`<!doctype html><html><head><title>Fiche location</title><style>body{font-family:Arial;color:#171a1d;margin:0}.sheet{padding:28px;min-height:95vh;page-break-after:always}.sheet:last-child{page-break-after:auto}table{border-collapse:collapse;width:100%;margin:10px 0}th,td{text-align:left;border-bottom:1px solid #ddd;padding:10px;border-collapse:collapse}th{width:180px;color:#555}.serial{margin-top:30px;color:#777;font-size:10px}.loan-meta th{display:none} @media print{.sheet{break-after:page}.sheet:last-child{break-after:auto}}</style></head><body>${html}<script>window.onload=()=>window.print()<\/script></body></html>`); w.document.close(); }
 function printKit(kit){
@@ -258,157 +275,114 @@ $('#printEachBtn').onclick=()=>printItems(items,true);
 $('#printKitsBtn').onclick=()=>{ if(!kits.length)return alert('Aucun sac ou kit.'); kits.forEach(k=>printKit(k)); };
 $('#printDepartBtn').onclick=()=>{ if(departureQueue.length){ populateDeparture(); $('#departureDialog').showModal(); } else alert('Ajoute des objets en mode DÉPART, puis valide.'); };
 
-// ---------- departure ----------
+// ---------- departure: scan queue + contract handover ----------
 let departureLoan = null;
 function populateDeparture(loan){
-  departureLoan = loan || null;
+  departureLoan=loan||null;
   const box=$('#departureItems'); box.innerHTML='';
-  const src = loan?.items?.length
-    ? loan.items
-    : items.map(x=>({ itemId:x.id, name:x.name, brand:x.brand, model:x.model, qty:1, status:'assigned' }));
-  const tpl = src.map(it=>`
-    <div class="depart-row">
-      <input type="checkbox" class="departCheck">
-      <input type="text" class="departName" value="${esc(it.name||it.itemId)}" disabled>
-      <input type="number" class="departQty" min="1" value="${it.qty||1}">
-      <select class="departStatus"><option value="departed" ${it.status==='departed'?'selected':''}>Départé</option><option value="returned" ${it.status==='returned'?'selected':''}>Retourné</option></select>
-    </div>`).join('');
-  box.innerHTML = tpl;
-}
-$('#departureTitle').textContent = departureLoan ? `Départ · ${departureLoan.client}` : 'Départ — validation';
-const dutyField = $('#departureTitle');
-$('#validateDeparture').onclick=async ()=>{
-  const box=$('#departureItems');
-  const names=[];
-  const rows=box.querySelectorAll('.depart-row');
-  const qty=new Map(); rows.forEach(r=>{ qty.set(r.querySelector('.departName').value, Math.max(1,Number(r.querySelector('.departQty').value)||1)); });
-  const selected=[];
-  rows.forEach(r=>{ if(r.querySelector('.departCheck').checked){ selected.push({ name:r.querySelector('.departName').value, qty:qty.get(r.querySelector('.departName').value), status:r.querySelector('.departStatus').value }); } });
-  if(!selected.length){ alert('Sélectionne au moins un objet.'); return; }
-  const form=$('#departureDialog').querySelector('form'); // not a form, skip
-  const date=$('#dateField') ? $('#dateField').value : new Date().toISOString().slice(0,10);
-  const lieu=$('#lieuField') ? $('#lieuField').value.trim() : '—';
-  const client=$('#clientField') ? $('#clientField').value.trim() : departureLoan?.client || '—';
-  const note=$('#noteField') ? $('#noteField').value.trim() : '';
-  // create a small movement log entry for each selected
-  const mDate=date;
-  selected.forEach(s=>{
-    movements.push({ id:uid(), date:mDate, type:'departure', itemId:null, itemName:s.name, qty:s.qty, holder:client, note:lieu+` — ${s.status}` });
+  const src=loan?.items?.length?loan.items:departureQueue;
+  $('#departureTitle').textContent=loan?`Départ · ${loan.client||''} ${loan.firstname||''}`:'Départ — validation du matériel scanné';
+  src.forEach(it=>{
+    const row=document.createElement('div'); row.className='depart-row'; row.dataset.itemId=it.itemId||'';
+    row.innerHTML=`<input type="checkbox" class="departCheck" checked><input type="text" class="departName" value="${esc(it.name||it.itemId)}" readonly><input type="number" class="departQty" min="1" value="${Math.max(1,Number(it.qty)||1)}"><select class="departStatus"><option value="departed" selected>À sortir</option><option value="returned">Déjà rendu</option></select>`;
+    box.appendChild(row);
   });
+  $('#departureCount').textContent=src.length;
+}
+$('#validateDeparture').onclick=()=>{
+  const rows=[...$('#departureItems').querySelectorAll('.depart-row')];
+  const selected=rows.filter(r=>r.querySelector('.departCheck').checked).map(r=>({itemId:r.dataset.itemId,name:r.querySelector('.departName').value,qty:Math.max(1,Number(r.querySelector('.departQty').value)||1),status:r.querySelector('.departStatus').value}));
+  if(!selected.length)return alert('Sélectionne au moins un objet.');
+  const date=new Date().toISOString().slice(0,10), client=departureLoan?`${departureLoan.client||''} ${departureLoan.firstname||''}`.trim():'Départ manuel';
+  selected.forEach(s=>{
+    const obj=items.find(x=>x.id===s.itemId);
+    if(obj&&s.status==='departed'){ obj.status='loaned'; obj.holder=client; obj.loanDate=departureLoan?.startDate||date; obj.dueDate=departureLoan?.endDate||''; }
+    movements.push({id:uid(),date,type:'departure',itemId:s.itemId||null,itemName:s.name,qty:s.qty,holder:client,note:departureLoan?`Location ${departureLoan.id}`:'Départ scanné'});
+  });
+  if(departureLoan){
+    departureLoan.items=(departureLoan.items||[]).map(it=>{const found=selected.find(s=>s.itemId&&s.itemId===it.itemId); return found?{...it,status:'departed'}:it;});
+    departureLoan.status='departed';
+  }
   saveAll();
-  const html=generateDeparturePDF(client,lieu,date,selected,note,departureLoan);
-  const w=window.open('','_blank'); w.document.write(html); w.document.close();
-  $('#departureDialog').close();
+  const html=generateDeparturePDF(client,'—',date,selected,'Vérifier le matériel au retour.',departureLoan);
+  const w=window.open('','_blank'); if(w){w.document.write(html);w.document.close();} else alert('Autorise les fenêtres surgissantes pour imprimer le PDF.');
+  departureQueue=[]; departureLoan=null; $('#departureDialog').close(); render();
 };
 function generateDeparturePDF(client,lieu,date,selected,note,loan){
-  const rows=selected.map(s=>`<tr><th>${esc(s.name)}</th><td>${s.qty}</td><td>${esc(s.status)}</td></tr>`).join('');
-  const meta='';
-  const loanLines='';
-  const html=`<article class="sheet"><header><h1>LA CAVERNE D’ALIBAAB</h1><b>LIEU DE DÉPART — VALIDÉ</b></header>
-    <table class="loan-meta">
-      <tr><th>Date</th><td>${esc(date)}</td></tr>
-      <tr><th>Lieu / objet</th><td>${esc(lieu)}</td></tr>
-      <tr><th>Client</th><td>${esc(client)}</td></tr>
-      <tr><th>Contact</th><td>${esc(loan?.contact||'')}</td></tr>
-      <tr><th>Début / Fin</th><td>${esc(loan?.startDate||'')} / ${esc(loan?.endDate||'')}</td></tr>
-      <tr><th>Status</th><td>VALIDÉ pour départ</td></tr>
-    </table>
-    <table class="loan-items"><tr><th>Équipement</th><th>Qté</th><th>Statut</th></tr>${rows}</table>
-    <p class="muted small">${esc(note||'')}</p>
-    <p class="serial">Identifiant : ${esc(date+lieu)}</p>
-  </article>`;
-  return `<!doctype html><html><head><title>Lieu de départ</title><style>body{font-family:Arial;color:#171a1d;margin:0}.sheet{padding:28px;min-height:95vh;page-break-after:always}.sheet:last-child{page-break-after:auto}table{border-collapse:collapse;width:100%;margin:10px 0}.sheet th,.sheet td{padding:10px;border-bottom:1px solid #ddd;text-align:left;border-collapse:collapse}.sheet th{width:180px;color:#555}.serial{margin-top:30px;color:#777;font-size:10px} @media print{.sheet{break-after:page}.sheet:last-child{break-after:auto}}.loan-meta th{display:none}</style></head><body>${html}<script>window.onload=()=>window.print()<\/script></body></html>`;
+  const rows=selected.map(s=>`<tr><td>${esc(s.name)}</td><td>${s.qty}</td><td>${s.status==='departed'?'Sorti':'Non sorti'}</td></tr>`).join('');
+  const html=`<article class="sheet"><header><h1>LA CAVERNE D’ALIBAAB</h1><b>BORDEREAU DE MISE À DISPOSITION</b></header><table class="loan-meta"><tr><th>Client</th><td>${esc(client)}</td></tr><tr><th>Contact</th><td>${esc(loan?.contact||'—')}</td></tr><tr><th>Début</th><td>${esc(loan?.startDate||date)}</td></tr><tr><th>Fin prévue</th><td>${esc(loan?.endDate||'—')}</td></tr><tr><th>Objet</th><td>${esc(loan?.objectif||'—')}</td></tr><tr><th>Date de départ</th><td>${esc(date)}</td></tr></table><table class="loan-items"><tr><th>Matériel</th><th>Qté</th><th>Contrôle</th></tr>${rows}</table><p>${esc(note||'')}</p><div class="signatures"><div>Signature du loueur</div><div>Signature du bénéficiaire</div></div><p class="serial">Contrat : ${esc(loan?.id||'Départ manuel')} · Généré le ${esc(date)}</p></article>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Bordereau de départ</title><style>body{font-family:Arial;color:#171a1d;margin:0}.sheet{padding:32px;max-width:900px;margin:auto}header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #e7a72d;padding-bottom:12px}h1{font-size:19px}table{border-collapse:collapse;width:100%;margin:18px 0}th,td{text-align:left;padding:11px;border-bottom:1px solid #ddd}.loan-meta th{width:180px}.signatures{display:flex;gap:50px;margin-top:70px}.signatures div{border-top:1px solid #555;padding-top:8px;flex:1;min-height:55px}.serial{font-size:10px;color:#777;margin-top:35px}@media print{.sheet{padding:18mm}}</style></head><body>${html}<script>window.onload=()=>window.print()<\/script></body></html>`;
 }
-// form fields for departure (quick mode)
-document.addEventListener('click', e=>{ if(e.target.closest('#addQuickDepart')){ $('#dateField').value=new Date().toISOString().slice(0,10); $('#departureDialog').showModal(); } });
-// keyboard: close departure dialog
+$('#printDepartBtn').onclick=()=>{ if(departureQueue.length){populateDeparture();$('#departureDialog').showModal();} else alert('Scanne des objets en mode DÉPART avant de valider.'); };
 $('#closeDeparture').onclick=$('#cancelDeparture').onclick=()=>$('#departureDialog').close();
 
 // ---------- scanner ----------
 let scanner=null, scannerMode='scan', scannerActive=false;
 function initScanner(){
-  // mode buttons
-  document.querySelectorAll('.mode-btn').forEach(b=>b.onclick=()=>setScannerMode(b.dataset.mode));
-  $('#scanToggle').onclick=(e)=>{ e.stopPropagation(); if(scannerActive){ stopScanner(); } else { startScanner(); } };
+  document.querySelectorAll('.mode-btn[data-mode]').forEach(b=>b.onclick=()=>setScannerMode(b.dataset.mode));
+  $('#scanToggle').onclick=()=>scannerActive?stopScanner():startScanner();
 }
 function setScannerMode(mode){
   scannerMode=mode;
-  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
-  const labels={scan:'Scanner une étiquette (QR) pour ouvrir la fiche.',depart:'Scanner un objet pour l\'ajouter à la liste de départ.',return:'Scanner un objet pour le ramener en stock.'};
+  document.querySelectorAll('.mode-btn[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
+  const labels={scan:'Scanner un QR de garantie ou une étiquette pour associer / ouvrir une fiche.',depart:'Scanner les équipements à sortir : ils seront ajoutés à une liste à valider.',return:'Scanner les équipements rendus : leur statut repassera en stock.'};
   $('#scanModeLabel').textContent=labels[mode]||'';
-  if(scannerActive){ stopScanner(); startScanner(); }
 }
 async function startScanner(){
-  if(scannerActive) return;
-  $('#scanContainer').hidden=false;
-  const video=document.getElementById('scanVideo');
-  const canvas=document.getElementById('scanCanvas');
-  let scanSize='auto';
+  if(scannerActive)return;
+  $('#scanContainer').hidden=false; $('#scanError').hidden=true;
   try{
     scanner=new Html5Qrcode('scanContainer');
-    await scanner.start({ video, locateQr: true }, (decodedText, decodedResult)=>{
-      onScanSuccess(decodedText, decodedResult);
-    }, (error)=>{});
-    scannerActive=true;
-    $('#scanStatus').textContent='Caméra prête — '+(scannerMode==='scan'?'scanner le QR':'choisir un mode');
-  }catch(err){
-    $('#scanError').textContent='Impossible de lancer la caméra. Autorise le contrôle de la caméra dans les réglages du navigateur.';
-    $('#scanError').hidden=false;
-  }
+    await scanner.start({facingMode:'environment'},{fps:10,qrbox:(w,h)=>({width:Math.min(260,w-30),height:Math.min(260,h-30)}),aspectRatio:1.0},onScanSuccess,()=>{});
+    scannerActive=true; $('#scanToggle').textContent='Arrêter la caméra'; $('#scanStatus').textContent='Caméra prête.';
+  }catch(err){ scanner=null; $('#scanError').textContent='Impossible de lancer la caméra. Sur iPhone, ouvre l’app depuis Safari ou l’écran d’accueil et autorise l’accès à la caméra. '+(err?.message||''); $('#scanError').hidden=false; }
 }
-function stopScanner(){
-  if(scanner){
-    scanner.stop().then(()=>{ scanner.clear(); scanner = null; }).catch(()=>{});
-    scannerActive=false;
-    $('#scanContainer').hidden=true;
-    $('#scanError').hidden=true;
-  }
+async function stopScanner(){
+  if(scanner){try{if(scannerActive)await scanner.stop();scanner.clear();}catch(e){} scanner=null;}
+  scannerActive=false; $('#scanContainer').hidden=true; $('#scanToggle').textContent='Lancer la caméra ▸';
 }
-function onScanSuccess(decodedText, decodedResult){
-  const safe=decodedText.trim();
+function findItemByScannedCode(value){
+  const code=String(value||'').trim();
+  return items.find(x=>x.id===parseItemFromScannedText(code)||x.qrCode===code||x.serial===code||x.barcode===code||x.externalQr===code);
+}
+function onScanSuccess(decodedText){
+  const safe=String(decodedText||'').trim(), now=Date.now();
+  if(!safe||(safe===lastScanValue&&now-lastScanAt<1800))return;
+  lastScanValue=safe;lastScanAt=now;
   const label=$('#scanStatus');
-  const t=$('#scanModeLabel');
   if(scannerMode==='scan'){
-    // try to open an item
-    const id = parseItemFromScannedText(safe);
-    if(id){
-      const x=items.find(i=>i.id===id);
-      if(x){ openEdit(x.id); label.textContent='Fiche ouverte.'; $('#scanLog').innerHTML+=`<li class="ok">✓ ${esc(x.name)}</li>`; }
-      else { label.textContent='QR reconnu, mais aucune fiche sur cet appareil.'; }
-    } else {
-      // generic QR → log
-      label.textContent='QR décodé, pas d\'item correspondant (attente).';
-      $('#scanLog').innerHTML+=`<li class="unknown">? ${esc(safe.slice(0,60))}</li>`;
-    }
-  } else if(scannerMode==='depart'){
-    const id = parseItemFromScannedText(safe);
-    if(!id){ label.textContent='QR non reconnu comme fiche d\'objet.'; return; }
-    const x=items.find(i=>i.id===id); if(!x){ label.textContent='Fiche introuvable.'; return; }
-    departureQueue.push({ itemId:x.id, name:x.name, qty:1, status:'departed' });
-    label.textContent=`✓ ${esc(x.name)} → liste de départ.`;
-    $('#scanLog').innerHTML+=`<li class="ok">+ ${esc(x.name)} (départ)</li>`;
-  } else if(scannerMode==='return'){
-    const id = parseItemFromScannedText(safe);
-    if(!id){ label.textContent='QR non reconnu.'; return; }
-    const x=items.find(i=>i.id===id); if(!x){ label.textContent='Fiche introuvable.'; return; }
-    x.status='stock';
-    if(x.holder){ x.holder=''; }
-    if(x.dueDate){ x.dueDate=''; }
-    x.loanDate='';
-    movements.push({ id:uid(), date:new Date().toISOString().slice(0,10), type:'return', itemId:x.id, itemName:x.name, qty:1, holder:'', note:'Retour en stock via scanner.' });
-    saveAll();
-    label.textContent=`↩ ${esc(x.name)} rendu en stock.`;
-    $('#scanLog').innerHTML+=`<li class="ok">↩ ${esc(x.name)} (retour)</li>`;
+    const travelId=parseTravelFromScannedText(safe), scenario=travel.find(t=>t.id===travelId);
+    if(scenario){const missing=[];let added=0;(scenario.needs||[]).forEach(n=>{const found=items.find(i=>[i.name,i.brand+' '+i.model].some(v=>v&&v.toLowerCase().includes(String(n.label||'').toLowerCase()))||String(n.label||'').toLowerCase().includes(i.name.toLowerCase()));if(found&&!departureQueue.some(q=>q.itemId===found.id)){departureQueue.push({itemId:found.id,name:found.name,qty:n.qty||1,status:'assigned'});added++;}else if(!found)missing.push(n.label);});label.textContent=`Scénario « ${scenario.name} » : ${added} équipement(s) ajouté(s) à la préparation.`;$('#scanResults').innerHTML=`<p><strong>${scenario.name}</strong> · ${added} ajouté(s)${missing.length?' · '+missing.length+' besoin(s) à associer':''}</p><button class="btn primary" id="openDepartureQueue">Vérifier la préparation</button>`;$('#openDepartureQueue').onclick=()=>{populateDeparture();$('#departureDialog').showModal();};addScanLog('Scénario : '+scenario.name,'ok');return;}
   }
-  if(!isNaN(label)){}
+  const x=findItemByScannedCode(safe);
+  if(scannerMode==='scan'){
+    if(x){openEdit(x.id);label.textContent=`Fiche ouverte : ${x.name}`;addScanLog('✓ '+x.name,'ok');}
+    else {
+      const choice=prompt('QR code reconnu mais non associé.\nColle ce code dans la fiche d’un matériel existant ou saisis le nom du matériel à créer.\n\nCode : '+safe+'\n\nNom du matériel (laisser vide pour ignorer) :');
+      if(choice){const name=choice.trim();if(name){const existing=items.find(i=>i.name.toLowerCase()===name.toLowerCase());if(existing){existing.externalQr=safe;saveAll();label.textContent=`QR associé à ${existing.name}`;addScanLog('QR associé : '+existing.name,'ok');}else{if(confirm(`Créer une fiche « ${name} » avec ce QR ?`)){editingId=null;resetForm();$('#itemForm').elements.name.value=name;$('#itemForm').elements.externalQr.value=safe;$('#itemDialog').showModal();}}}}
+      else {label.textContent='QR mémorisé non associé : '+safe.slice(0,70);addScanLog('? '+safe.slice(0,70),'unknown');}
+    }
+  }else if(scannerMode==='depart'){
+    if(!x){label.textContent='QR non associé à un équipement. Passe en mode SCAN pour l’associer.';addScanLog('? '+safe.slice(0,60),'unknown');return;}
+    if(departureQueue.some(q=>q.itemId===x.id)){label.textContent=`Déjà dans la liste : ${x.name}`;return;}
+    departureQueue.push({itemId:x.id,name:x.name,qty:1,status:'assigned'});label.textContent=`✓ ${x.name} ajouté à la liste de départ (${departureQueue.length}).`;addScanLog('+ '+x.name,'ok');
+    $('#scanResults').innerHTML=`<p><strong>${departureQueue.length}</strong> matériel(s) dans la liste de départ.</p><button class="btn primary" id="openDepartureQueue">Vérifier et valider le départ</button>`;
+    $('#openDepartureQueue').onclick=()=>{populateDeparture();$('#departureDialog').showModal();};
+  }else if(scannerMode==='return'){
+    if(!x){label.textContent='QR non associé à un équipement.';return;}
+    const previousHolder=x.holder||'';x.status='stock';x.holder='';x.dueDate='';x.loanDate='';
+    loans.forEach(l=>{(l.items||[]).forEach(it=>{if(it.itemId===x.id)it.status='returned';});if((l.items||[]).length&&l.items.every(it=>it.status==='returned'))l.status='returned';});
+    movements.push({id:uid(),date:new Date().toISOString().slice(0,10),type:'return',itemId:x.id,itemName:x.name,qty:1,holder:previousHolder,note:'Retour validé par scanner'});
+    saveAll();label.textContent=`↩ ${x.name} rendu en stock.`;addScanLog('↩ '+x.name,'ok');
+  }
 }
+function addScanLog(label,kind){const ul=$('#scanLog');const li=document.createElement('li');li.className=kind||'';li.textContent=label;ul.prepend(li);while(ul.children.length>20)ul.lastElementChild.remove();}
+function parseTravelFromScannedText(text){const m=String(text||'').match(/(?:caverne-alibaab:travel=|travel=)([^\s&]+)/i);return m?decodeURIComponent(m[1]):null;}
 function parseItemFromScannedText(text){
-  // formats: caverne-alibaab:item=ID ; #item=ID ; item=ID ; plain ID ; URLs
-  let s=text.trim();
-  const m=s.match(/#item=([^&]+)/i); if(m) return decodeURIComponent(m[1]);
-  const m2=s.match(/(?:caverne-alibaab:item|item=)([^\s&]+)/i); if(m2) return decodeURIComponent(m2[1]);
-  const m3=s.match(/^[a-z0-9\-]{8,64}$/i); if(m3) return m3[0];
-  return null;
+  const s=String(text||'').trim();
+  const patterns=[/#item=([^&]+)/i,/(?:caverne-alibaab:item=|item=)([^\s&]+)/i,/\/item\/([a-z0-9-]{8,64})/i];
+  for(const re of patterns){const m=s.match(re);if(m)return decodeURIComponent(m[1]);}
+  return /^[a-z0-9-]{8,64}$/i.test(s)?s:null;
 }
 
 $('#photo').onchange=async e=>{
@@ -429,42 +403,74 @@ async function runOcrAndSearch(){
     const mod=await import('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
     const Tesseract=mod.default || mod.Tesseract;
     const worker=await Tesseract.createWorker('fra');
-    txt=await worker.recognize(f);
+    const result=await worker.recognize(f); txt=result.data;
     await worker.terminate();
   }catch(err){
     box.textContent='OCR indisponible (réseau). Retour à la recherche textuelle.';
   }
   if(txt){
-    const words=txt.text().split(/\s+/).filter(w=>w.length>2);
-    let cands=[], all=items.map(x=>x.name+x.model+x.brand+x.serial).join(' ');
-    // simple scoring
-    words.forEach(w=>{ const re=new RegExp(w,'i'); items.forEach(x=>{ if(re.test(x.name)||re.test(x.model)||re.test(x.brand)||re.test(x.serial)) cands.push(x); }); });
-    cands=[...new Set(cands)];
+    const raw=String(txt.text||''); const words=raw.split(/\s+/).filter(w=>w.length>2);
+    let cands=[];
+    words.forEach(w=>{ const re=new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'); items.forEach(x=>{ if(re.test(x.name||'')||re.test(x.model||'')||re.test(x.brand||'')||re.test(x.serial||'')) cands.push(x); }); });
+    cands=[...new Map(cands.map(x=>[x.id,x])).values()];
     if(cands.length){
-      const pick=prompt('Objet correspondant (choix) :\n'+cands.map((x,i)=>`${i+1}. ${esc(x.name)} — ${esc(x.model||x.category)}`).join('\n'));
-      if(pick!=null && /^\d+$/.test(pick)&&Number(pick)<=cands.length){ const x=cands[Number(pick)-1]; Object.assign($('#itemForm').elements, { name:x.name, brand:x.brand||'', model:x.model||'', serial:x.serial||'', category:x.category||'Camera' }); $('#photoPreview').hidden=true; box.textContent='Préremplissage appliqué.'; }
-      else box.textContent='Aucun choix effectué.';
-    } else { box.textContent='Aucun objet ne correspond à la photo.'; }
+      const pick=prompt('Matériel correspondant à la photo :\n'+cands.map((x,i)=>`${i+1}. ${x.name} — ${x.brand||''} ${x.model||''}`).join('\n')+'\n\nNuméro de la fiche à reprendre (ou annuler pour lire la plaque) :');
+      if(pick!=null && /^\d+$/.test(pick)&&Number(pick)>=1&&Number(pick)<=cands.length){ const x=cands[Number(pick)-1]; for(const [k,v] of Object.entries({name:x.name,brand:x.brand||'',model:x.model||'',serial:x.serial||'',category:x.category||'Autre'})){const el=$('#itemForm').elements.namedItem(k);if(el)el.value=v;} box.textContent='Informations de la fiche reprises. Vérifie-les avant enregistrement.'; return; }
+    }
+    const lines=raw.split(/\n+/).map(x=>x.trim()).filter(x=>x.length>2);
+    const brands=['Sony','Canon','Panasonic','Blackmagic','RED','ARRI','Nikon','Fujifilm','DJI','Sennheiser','Rode','Shure','Zoom','Apple','Aputure','Godox','Nanlite','Manfrotto','Sigma','Tamron'];
+    const brand=brands.find(b=>new RegExp('\\b'+b+'\\b','i').test(raw))||'';
+    const serialMatch=raw.match(/(?:S\/?N|SERIAL|SER\.?NO|N°\s*SÉRIE|Nº\s*SÉRIE)\s*[:#-]?\s*([A-Z0-9-]{5,})/i)||raw.match(/\b[A-Z0-9]{2,}[-][A-Z0-9-]{3,}\b/);
+    const modelLine=lines.find(line=>brand&&new RegExp(brand,'i').test(line))||lines.find(line=>/[A-Z]/.test(line)&&/\d/.test(line))||'';
+    const model=modelLine.replace(new RegExp(brand,'i'),'').replace(/[^A-Z0-9 ._-]/gi,' ').trim().slice(0,50);
+    const nameEl=$('#itemForm').elements.namedItem('name'),brandEl=$('#itemForm').elements.namedItem('brand'),modelEl=$('#itemForm').elements.namedItem('model'),serialEl=$('#itemForm').elements.namedItem('serial');
+    if(brand&&!brandEl.value)brandEl.value=brand;if(model&&!modelEl.value)modelEl.value=model;if(serialMatch&&!serialEl.value)serialEl.value=serialMatch[1]||serialMatch[0];if(!nameEl.value&&brand)nameEl.value=[brand,model].filter(Boolean).join(' ');
+    box.textContent=brand||model||serialMatch?'Lecture proposée : vérifie les champs préremplis, car l’OCR peut se tromper.':'Aucune information exploitable détectée. Saisis les champs manuellement.';
   } else { box.textContent='Aucun texte lu.'; }
 }
 
-// ---------- import / cloud sync ----------
-$('#importUrlBtn').onclick=async ()=>{
-  const url=$('#importUrl').value.trim(); if(!url){ alert('URL invalide.'); return; }
-  $('#importNote').textContent='Récupération…';
+// ---------- cloud synchronization (Supabase REST, optional) ----------
+const SYNC_KEY='caverne_alibaab_supabase_config', SESSION_KEY='caverne_alibaab_supabase_session';
+function getSyncConfig(){try{return JSON.parse(localStorage.getItem(SYNC_KEY)||'{}');}catch(e){return {};}}
+function getSyncSession(){try{return JSON.parse(localStorage.getItem(SESSION_KEY)||'null');}catch(e){return null;}}
+async function ensureSyncSession(cfg){let session=getSyncSession();if(!session?.access_token)return null;const expiry=Number(session.expires_at||0);if(expiry&&expiry>Date.now()/1000+90)return session;if(!session.refresh_token)return session;const r=await fetch(cfg.url.replace(/\/$/,'')+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:cfg.key,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:session.refresh_token})});if(!r.ok)return session;session=await r.json();localStorage.setItem(SESSION_KEY,JSON.stringify(session));return session;}
+function setSyncStatus(msg,ok=false){const el=$('#syncStatus');if(el){el.textContent=msg;el.classList.toggle('sync-ok',ok);}}
+function applyState(data){items=data.items||[];kits=data.kits||[];travel=data.travel||[];loans=data.loans||[];movements=data.movements||[];stateUpdatedAt=data.updatedAt||new Date().toISOString();idb.set('state',{items,kits,travel,loans,movements,updatedAt:stateUpdatedAt}).catch(()=>{});render();refreshLoanOptions();}
+function snapshot(){return {items,kits,travel,loans,movements,updatedAt:stateUpdatedAt};}
+async function syncNow(direction='auto'){
+  const cfg=getSyncConfig(); if(!cfg.url||!cfg.key){setSyncStatus('Configure Supabase pour activer la synchronisation.');return;}
+  const base=cfg.url.replace(/\/$/,'')+'/rest/v1/caverne_state';
+  let session=await ensureSyncSession(cfg); if(!session?.access_token){setSyncStatus('Connecte-toi au compte Supabase sur cet appareil.');return;}
+  const headers={'apikey':cfg.key,'Authorization':'Bearer '+session.access_token,'Content-Type':'application/json','Accept':'application/json','Prefer':'resolution=merge-duplicates,return=representation'};
   try{
-    const r=await fetch(url, { mode:'cors' }); if(!r.ok) throw Error('HTTP '+r.status);
-    const data=await r.json();
-    if(!data || !Array.isArray(data.items)) throw Error('Données incomplètes (champs attendus : items).');
-    if(!confirm('Importer sur cet appareil va combler les listes existantes. Continuer ?')){ return; }
-    items=data.items; kits=data.kits||[]; travel=data.travel||[]; loans=data.loans||[]; movements=data.movements||[];
-    saveAll();
-    $('#importNote').textContent='Imported ✅ '+items.length+' articles, '+loans.length+' locations.';
-  }catch(err){ $('#importNote').textContent='Erreur : '+err.message; }
-};
-// file import (hidden input reused)
+    const response=await fetch(base+'?owner_id=eq.'+encodeURIComponent(session.user.id)+'&select=*',{headers});if(response.status===401){setSyncStatus('Session expirée : reconnecte-toi.');return;}if(!response.ok)throw Error('Lecture Supabase : HTTP '+response.status);
+    const rows=await response.json(), local=snapshot(), remote=rows[0];
+    if(direction==='pull'){
+      if(!remote)throw Error('Aucune sauvegarde distante. Fais une première synchronisation dans le sens « Envoyer ».');
+      if(!confirm('Remplacer les données de cet appareil par la version en ligne ?'))return;
+      applyState(remote.payload||{});setSyncStatus('Données récupérées depuis Supabase.',true);return;
+    }
+    if(direction==='push'){
+      if(!confirm('Envoyer les données de cet appareil vers la base partagée ?'))return;
+      const r=await fetch(base,{method:'POST',headers,body:JSON.stringify({owner_id:session.user.id,payload:local,updated_at:local.updatedAt})});if(!r.ok)throw Error('Écriture Supabase : HTTP '+r.status);
+      setSyncStatus('Synchronisation envoyée avec succès.',true);return;
+    }
+    if(remote&&remote.payload){const rt=Date.parse(remote.payload.updatedAt||remote.updated_at||0),lt=Date.parse(local.updatedAt||0);if(rt>lt){applyState(remote.payload);setSyncStatus('Version en ligne récupérée.',true);return;}if(rt===lt){setSyncStatus('Déjà synchronisé · '+new Date().toLocaleTimeString('fr-FR'),true);return;}}
+    const r=await fetch(base,{method:'POST',headers,body:JSON.stringify({owner_id:session.user.id,payload:local,updated_at:local.updatedAt})});if(!r.ok)throw Error('Écriture Supabase : HTTP '+r.status);
+    setSyncStatus('Synchronisé · '+new Date().toLocaleTimeString('fr-FR'),true);
+  }catch(err){setSyncStatus('Synchronisation impossible : '+err.message);}
+}
+$('#saveSyncConfig').onclick=()=>{const url=$('#supabaseUrl').value.trim(),key=$('#supabaseKey').value.trim();if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)||!key){alert('Vérifie l’URL du projet et la clé anon/public.');return;}localStorage.setItem(SYNC_KEY,JSON.stringify({url,key}));setSyncStatus('Projet enregistré. Connecte-toi avec ton compte partagé.');};
+$('#syncPush').onclick=()=>syncNow('push');$('#syncPull').onclick=()=>syncNow('pull');$('#syncNow').onclick=()=>syncNow('auto');
+async function authSupabase(mode){const cfg=getSyncConfig();if(!cfg.url||!cfg.key){alert('Enregistre d’abord l’URL et la clé Supabase.');return;}const email=$('#syncEmail').value.trim(),password=$('#syncPassword').value;if(!email||!password){alert('Saisis ton e-mail et ton mot de passe.');return;}try{const endpoint=mode==='signup'?'/auth/v1/signup':'/auth/v1/token?grant_type=password';const r=await fetch(cfg.url.replace(/\/$/,'')+endpoint,{method:'POST',headers:{apikey:cfg.key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});const data=await r.json();if(!r.ok)throw Error(data.msg||data.message||data.error_description||'Authentification refusée');if(data.access_token){localStorage.setItem(SESSION_KEY,JSON.stringify(data));setSyncStatus('Connecté : '+email,true);await syncNow('auto');}else setSyncStatus('Compte créé. Vérifie ton e-mail si la confirmation est activée.');}catch(err){setSyncStatus('Connexion impossible : '+err.message);}}
+$('#syncSignUp').onclick=()=>authSupabase('signup');$('#syncSignIn').onclick=()=>authSupabase('signin');$('#syncSignOut').onclick=()=>{localStorage.removeItem(SESSION_KEY);setSyncStatus('Déconnecté de Supabase.');};
+const syncCfg=getSyncConfig();if($('#supabaseUrl'))$('#supabaseUrl').value=syncCfg.url||'';if($('#supabaseKey'))$('#supabaseKey').value=syncCfg.key||'';
+window.addEventListener('online',()=>syncNow('auto'));window.addEventListener('focus',()=>{if(getSyncConfig().url)syncNow('auto');});
+setInterval(()=>{if(getSyncConfig().url&&navigator.onLine)syncNow('auto');},60000);
+// Legacy JSON URL import remains available
+$('#importUrlBtn').onclick=async ()=>{const url=$('#importUrl').value.trim();if(!url){alert('URL invalide.');return;}$('#importNote').textContent='Récupération…';try{const r=await fetch(url);if(!r.ok)throw Error('HTTP '+r.status);const data=await r.json();if(!Array.isArray(data.items))throw Error('Fichier JSON non reconnu.');if(!confirm('Remplacer les données locales par ce fichier ?'))return;applyState(data);$('#importNote').textContent='Import terminé : '+items.length+' équipements.';}catch(err){$('#importNote').textContent='Erreur : '+err.message;}};
 $('#importFileBtn').onclick=()=>$('#importFile').click();
-$('#importFile').onchange=async e=>{ const f=e.target.files[0]; if(!f)return; try{ const data=JSON.parse(await f.text()); if(!data||!Array.isArray(data.items))throw Error('Fichier invalide.'); if(!confirm('Importer ce JSON sur cet appareil. Continuer ?'))return; items=data.items; kits=data.kits||[]; travel=data.travel||[]; loans=data.loans||[]; movements=data.movements||[]; saveAll(); $('#importNote').textContent='Imported ✅ '+items.length+' articles.'; }catch(err){ alert('Fichier invalide : '+err.message); } e.target.value=''; };
+$('#importFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const data=JSON.parse(await f.text());if(!Array.isArray(data.items))throw Error('Fichier invalide.');if(!confirm('Remplacer les données locales par cette sauvegarde ?'))return;applyState(data);$('#importNote').textContent='Import terminé.';}catch(err){alert('Fichier invalide : '+err.message);}e.target.value='';};
 
 // ---------- bootstrap: ensure buttons used by event delegation exist ----------
 document.addEventListener('DOMContentLoaded', ()=>{

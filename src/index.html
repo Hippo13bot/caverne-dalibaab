@@ -76,7 +76,7 @@
   <!-- SCANNERS -->
   <section id="scannerView" hidden>
     <div class="section-head-row">
-      <div><h2>Scanners</h2><p class="muted">Lance la caméra. Tu peux scanner une étiquette de garantie (le lien ouvre la fiche), ou passer en mode départ / retour.</p></div>
+      <div><h2>Scanners</h2><p class="muted">Scanne les QR de garantie déjà présents : associe-les à une fiche, puis réutilise-les en départ et retour.</p></div>
     </div>
     <div class="scanner-card">
       <div class="scan-toolbar">
@@ -84,12 +84,8 @@
         <div class="scan-status" id="scanStatus">Prêt. <span id="scanModeLabel">Scanner une étiquette.</span></div>
         <button class="btn subtle" id="scanToggle">Lancer la caméra ▸</button>
       </div>
-      <div id="scanContainer" class="scan-container">
-        <video id="scanVideo" playsinline></video>
-        <canvas id="scanCanvas"></canvas>
-        <div id="scanOverlay" class="scan-overlay"><span>Scannage en cours…</span></div>
-        <div id="scanError" class="scan-error" hidden></div>
-      </div>
+      <div id="scanContainer" class="scan-container" hidden></div>
+      <div id="scanError" class="scan-error" hidden></div>
       <div class="scan-results" id="scanResults"></div>
       <div class="scan-log">
         <p class="muted small">Derniers décodages :</p>
@@ -108,6 +104,7 @@
       <article class="panel"><h3>Fiches par sac (kit/sac)</h3><p>Imprime une fiche de localisation avec le contenu, la quantité et l'état de chaque élément.</p><button class="btn primary" id="printKitsBtn">Préparer les fiches par sac</button></article>
       <article class="panel"><h3>Lieu de départ (PDF)</h3><p>Fenêtre de validation pour lever les éléments d'une location (client, dates, objets) puis générer le PDF.</p><button class="btn primary" id="printDepartBtn">Valider et imprimer le départ</button></article>
       <article class="panel"><h3>Sauvegarde complète</h3><p>Conserve une copie JSON. Sur iPhone, AirDrop/Fichiers/Mail. Sur Mac, restaure depuis ce fichier.</p><button class="btn primary" id="backupBtn2">Créer une sauvegarde</button></article>
+      <article class="panel sync-panel"><h3>Synchronisation Mac ↔ iPhone</h3><p>Une base Supabase commune permet de retrouver le même inventaire sur tes appareils. Configure une seule fois le projet, puis synchronise.</p><label>URL du projet Supabase<input id="supabaseUrl" type="url" placeholder="https://xxxx.supabase.co"></label><label>Clé anon / publishable<input id="supabaseKey" type="password" autocomplete="off" placeholder="sb_publishable_… ou anon key"></label><button class="btn" id="saveSyncConfig">Enregistrer le projet</button><label>Adresse e-mail du compte partagé<input id="syncEmail" type="email" autocomplete="username" placeholder="toi@exemple.fr"></label><label>Mot de passe<input id="syncPassword" type="password" autocomplete="current-password" placeholder="Mot de passe Supabase"></label><div class="sync-actions"><button class="btn" id="syncSignUp">Créer mon compte</button><button class="btn" id="syncSignIn">Se connecter</button><button class="btn subtle" id="syncSignOut">Déconnexion</button></div><div class="sync-actions"><button class="btn primary" id="syncNow">Synchroniser</button><button class="btn subtle" id="syncPush">Envoyer vers le cloud</button><button class="btn subtle" id="syncPull">Récupérer du cloud</button></div><p id="syncStatus" class="note small">Non configuré · les données restent enregistrées localement.</p><details><summary>Installation de Supabase (une seule fois)</summary><p>Dans Supabase, crée un projet puis ouvre SQL Editor et exécute le SQL fourni dans <b>docs/SUPABASE.sql</b>. Active la confirmation d’e-mail si tu le souhaites, crée ton compte ici, puis connecte Mac et iPhone avec le même compte. Copie l’URL du projet et la clé publique dans les champs ci-dessus.</p><p class="muted">La clé secrète « service_role » ne doit jamais être utilisée dans l’application.</p></details></article>
       <article class="panel"><h3>Importer (cloud)</h3><p class="muted">Complète ou remplace les données locales depuis un JSON hébergé (pour Mac ↔ iPhone).</p><div class="toolbar" style="margin-bottom:8px"><input id="importUrl" type="text" placeholder="https://…" style="flex:1;padding:11px 12px;font-size:14px"><button class="btn" id="importUrlBtn">Importer</button></div><button class="btn subtle" id="importFileBtn">Importer un fichier JSON</button><input id="importFile" type="file" accept="application/json" hidden><p class="note small" id="importNote"></p></article>
     </div>
   </section>
@@ -120,7 +117,7 @@
     <label class="photo-box">＋<span>Photo du matériel</span><input id="photo" type="file" accept="image/*" capture="environment"></label>
     <button class="btn subtle small" id="photoSearchBtn">📷 Rechercher par photo</button>
     <img id="photoPreview" hidden alt="Aperçu">
-    <p class="muted">Prends la plaque signalétique. Le moteur OCR a besoin du réseau : il permet de pré-remplir marque/modèle/série.</p>
+    <p class="muted">Photographie la plaque signalétique : la lecture OCR peut proposer marque, modèle et numéro de série. Vérifie toujours avant d’enregistrer.</p><p id="ocrBox" class="note small" hidden></p>
   </div>
   <div class="form-grid">
     <label>Nom du matériel *<input name="name" required placeholder="Caméra principale"></label>
@@ -128,7 +125,7 @@
       <option>Caméras & vidéo</option><option>Photo</option><option>Objectifs</option><option>Son & microphones</option><option>Enceintes</option><option>Éclairage</option><option>Ordinateurs</option><option>Informatique & réseaux</option><option>Écrans & périphériques</option><option>Stockage</option><option>Câbles & connectiques</option><option>Trépieds & supports</option><option>Sacs & mallettes</option><option>Accessoires</option><option>Autre</option>
     </select></label>
     <label>Marque<input name="brand" placeholder="Sony, Canon, Apple…"></label><label>Modèle<input name="model" placeholder="FX3, A7 IV…"></label>
-    <label>Numéro de série<input name="serial" placeholder="Numéro inscrit sur l'appareil"></label><label>Quantité<input name="quantity" type="number" min="1" value="1"></label>
+    <label>Numéro de série<input name="serial" placeholder="Numéro inscrit sur l'appareil"></label><label class="wide">QR / code-barres existant<input name="externalQr" placeholder="Code du QR de garantie / fabricant"></label><label>Quantité<input name="quantity" type="number" min="1" value="1"></label>
     <label>État<select name="status"><option value="stock">En stock</option><option value="loaned">Emprunté / sorti</option><option value="unavailable">Indisponible</option></select></label>
     <label>Motif si indisponible<select name="reason"><option value="">—</option><option value="repair">En réparation</option><option value="lost">Perdu</option><option value="out_of_service">Hors service</option></select></label>
     <label>Emplacement<input name="location" placeholder="Studio, armoire A, sac caméra 01…"></label><label>Personne / détenteur<input name="holder" placeholder="Nom si le matériel est sorti"></label>
@@ -167,14 +164,14 @@
 <!-- LOAN (new) -->
 <dialog id="loanDialog"><form id="loanForm" class="dialog-form">
   <div class="dialog-head"><div><p class="eyebrow">LOCATION DE TOURNAGE</p><h2 id="loanDialogTitle">Nouveau contrat</h2></div><button type="button" class="close" id="closeLoan">✕</button></div>
-  <label>Client / demandeur *<input name="client" required placeholder="Nom de l'association / service"></label>
+  <label>Nom du bénéficiaire *<input name="client" required placeholder="Nom de famille ou organisme"></label>
   <label>Prénom<input name="firstname" placeholder="Prénom du détenteur principal"></label>
   <label>Contact<input name="contact" placeholder="Téléphone ou mail"></label>
   <label>Dates de location *<div class="twocol"><label>Début<input name="startDate" type="date" required></label><label>Fin<input name="endDate" type="date" required></label></div></label>
   <label>Objectif / nature de la sortie<input name="objectif" placeholder="Ex. : tournage documentaire, 2 journées"></label>
   <label class="wide">Équipement à préparer (sélectionner dans l'inventaire)</label>
   <select name="items" id="loanItemsSelect" multiple size="7" class="loan-items"></select>
-  <p class="muted small">Sélectionne les objets (Ctrl/⌘ pour plusieurs). Une ligne « Prêt » est créée par objet ; renseigne la quantité et l'état.</p>
+  <p class="muted small">Sélectionne les objets (Ctrl/⌘ pour plusieurs), puis indique les quantités.</p><div id="loanRows" class="loan-rows"></div>
   <div class="dialog-actions"><button class="btn primary" type="submit">Enregistrer la location</button><button type="button" class="btn subtle" id="addLoanBtn">＋ Ajouter une location</button><button type="button" class="btn subtle" id="cancelLoan">Annuler</button></div>
 </form></dialog>
 
@@ -205,6 +202,7 @@
   <div class="scanner-log"><div class="muted small">Derniers décodages</div><ul id="scannerLog" class="scanner-log-list"></ul></div>
 </div>
 
+<dialog id="qrDialog"><div class="dialog-form qr-content"><div class="dialog-head"><h2 id="qrTitle">QR matériel</h2><button type="button" class="close" id="closeQR">✕</button></div><img id="qrImage" alt="QR code du matériel"><p class="muted">Ce QR est lié à la fiche matériel. Tu peux aussi conserver et associer le QR de garantie du fabricant.</p><button type="button" class="btn primary" id="printQRBtn">Imprimer le QR</button></div></dialog>
 <script src="qr.js"></script>
 <script src="vendor/html5-qrcode.min.js"></script>
 <script src="app.js"></script>

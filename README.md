@@ -1,65 +1,60 @@
 # La caverne d'Alibaab
 
-Inventaire de matériel audiovisuel, photo, son, informatique et accessoires. **Un seul code, trois usages** :
+Inventaire de matériel audiovisuel, photo, son, informatique et accessoires. Un seul code pour l'application Mac/Windows et la PWA iPhone/iPad.
 
-| Où | Comment |
-|---|---|
-| **iPhone / iPad** | App web installable (PWA) : s'ajoute à l'écran d'accueil, fonctionne hors-ligne |
-| **Mac / Windows** | Application Electron (installateurs `.dmg` / `.exe`) |
-| **N'importe quel navigateur** | Ouvrir `src/index.html` ou la page GitHub Pages |
+## Fonctionnalités
+- Inventaire avec fiches, photos, catégories, numéros de série, quantités, statuts, garanties, emplacement et notes.
+- Sacs et kits avec fiches PDF par contenant.
+- Scanners caméra avec trois modes : **SCAN**, **DÉPART** et **RETOUR**. Les QR fabricant / garantie peuvent être associés aux fiches et réutilisés.
+- Départs validés par scan, changement d'état des équipements, historique des mouvements et bordereau PDF avec coordonnées du bénéficiaire et dates.
+- Locations avec client, prénom, contact, dates, matériel sélectionné et quantités.
+- Scénarios de tournage avec listes de besoins et quantités.
+- OCR de plaque signalétique pour proposer marque, modèle et numéro de série (connexion internet requise ; vérification humaine nécessaire).
+- Export CSV, sauvegarde/restauration JSON, fiches PDF individuelles et inventaire.
+- Stockage local IndexedDB pour rester utilisable hors ligne.
+- Synchronisation périodique Mac ↔ iPhone via Supabase, avec compte utilisateur et règles RLS. La configuration initiale est décrite dans `docs/GUIDE-UTILISATEUR.md` et `docs/SUPABASE.sql`.
 
 ## Identité
-- Le GIF de la mascotte **bouge** dans l'app (logo en haut, bandeau d'accueil).
-- L'**icône de l'app** (écran d'accueil iPhone, Dock, onglet) est une **image fixe** tirée de la première image du GIF (`src/icons/`, `assets/icon.png`).
-- Si l'iPhone est réglé sur « Réduire les animations », le GIF est remplacé par l'image fixe.
+- Mascotte GIF animée dans l'application.
+- Icônes fixes adaptées à l'écran d'accueil et au Dock.
 
-## Fonctionnement
-- 100 % local : aucun compte, aucun serveur, aucune connexion requise.
-- Fiches avec photo (appareil photo de l'iPhone directement), catégories, série, quantité, statut, emprunteur, dates, emplacement, prix, garantie, notes.
-- Sacs et kits, QR code par fiche, export CSV (Notion/Excel), sauvegarde/restauration JSON, impression et fiches PDF.
-- **Scanners** : liste de matériel à prévoir (scénarios de tournage), entrées et sorties de matériel ; le QR code de garantie devient le scanner de la fiche. États **DÉPART** (à valider avant partir) et **RETOUR** (qui change le statut de l'objet).
-- **Locations de tournage** : contrat avec nom, prénom, contact, dates de début et de fin, liste de matériel pré-réservée ; validation + impression PDF.
-- **Gestion des tournages** : ajout de tournages avec leurs besoins en matériel.
-- Stockage dans **IndexedDB** (beaucoup plus d'espace que localStorage : indispensable pour les photos sur iPhone). Les anciennes données localStorage sont migrées automatiquement.
-- **Photographie** : prendre en photo un objet pour un pré-remplissage (recherche par OCR, réseau requis).
-- **QR code** : sur la version web, il contient un lien `…/index.html#item=ID`. Le scanner avec l'appareil photo de l'iPhone ouvre la fiche dans l'app.
+## Publier la version iPhone (GitHub Pages)
+1. Pousse le dépôt sur la branche `main`.
+2. Dans GitHub, **Settings ▸ Pages**, choisis **GitHub Actions**.
+3. Le workflow `.github/workflows/pages.yml` publie le dossier `src/`.
+4. Sur iPhone, ouvre l'adresse publiée dans Safari puis **Partager ▸ Sur l'écran d'accueil**.
+5. Autorise l'accès à la caméra pour utiliser les scanners.
 
-## Mettre la version iPhone en ligne (GitHub Pages)
-1. Crée un dépôt GitHub et pousse ce dossier sur la branche `main`.
-2. Dans **Settings ▸ Pages**, choisis **Source : GitHub Actions**.
-3. Le workflow `.github/workflows/pages.yml` publie le dossier `src/` : l'adresse est du type `https://TON-COMPTE.github.io/NOM-DU-DEPOT/`.
-4. Sur l'iPhone, ouvre cette adresse **dans Safari** ▸ **Partager** ▸ **Sur l'écran d'accueil**.
+## Compiler Mac et Windows avec GitHub Actions
+1. Pousse le dépôt sur GitHub.
+2. Dans **Actions**, lance « Compiler l'app Mac et Windows » ou crée un tag de version :
+   ```bash
+   git tag v1.1.0
+   git push origin v1.1.0
+   ```
+3. Télécharge les installateurs dans les artefacts du workflow ou dans la Release.
 
-> ⚠️ Les données restent **sur chaque appareil** (iPhone ≠ Mac). Pour les transférer : **Sauvegarder** (sur iPhone, la feuille de partage propose AirDrop, Fichiers, Mail…) puis **Restaurer** sur l'autre appareil. Sur iPhone, fais ta première saisie **après** avoir installé l'app sur l'écran d'accueil : Safari et l'app installée ont chacun leur propre stockage.
+Fichiers produits : DMG Mac (Apple Silicon et Intel) et installateur Windows.
 
-## Compiler l'app Mac et Windows avec GitHub Actions
-Rien à installer sur ton ordinateur : GitHub compile pour toi.
-1. Pousse le dossier sur GitHub (branche `main`).
-2. **Test rapide** : onglet **Actions** ▸ « Compiler l'app Mac et Windows » ▸ **Run workflow**. Au bout de quelques minutes, les installateurs sont en bas de la page du run (section *Artifacts*).
-3. **Version officielle** : crée un tag, GitHub publie alors une **Release** avec les fichiers à télécharger.
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-Fichiers produits : `…-Mac-arm64.dmg` (Mac récents M1 à M4), `…-Mac-x64.dmg` (Mac Intel), `…-Windows-Setup.exe`.
+## Avertissements au premier lancement
+- **Mac** : clic droit ▸ Ouvrir. Si macOS déclare l'application endommagée : `xattr -cr "/Applications/La caverne d'Alibaab.app"` dans Terminal.
+- **Windows** : SmartScreen peut afficher un avertissement pour une application non signée.
 
-**Avertissements au premier lancement** (l'app n'est pas signée, la signature coûte un abonnement Apple/Microsoft) :
-- **Mac** : ouvre le `.dmg`, glisse l'app dans Applications, puis **clic droit ▸ Ouvrir ▸ Ouvrir**. Si macOS la déclare « endommagée » : `xattr -cr "/Applications/La caverne d'Alibaab.app"` dans le Terminal.
-- **Windows** : SmartScreen affiche « Windows a protégé votre ordinateur » : **Informations complémentaires ▸ Exécuter quand même**.
-
-## Développer en local (facultatif)
+## Développer en local
 Prérequis : Node.js 20+.
 ```bash
 npm install
 npm start
 ```
 
-## Tester la version web en local
+Pour tester la PWA localement :
 ```bash
-cd src && python3 -m http.server 8000   # puis http://localhost:8000
+cd src && python3 -m http.server 8000
 ```
-(Le service worker hors-ligne nécessite http(s), pas `file://`.)
+Puis ouvre `http://localhost:8000`. La caméra et le service worker nécessitent un contexte sécurisé (HTTPS ou localhost).
 
-## Limites
-- Pas de synchronisation automatique entre appareils (voir `docs/ROADMAP.md`).
-- Faire des sauvegardes régulières : si l'iPhone vide les données d'un site peu utilisé, la sauvegarde est le filet de sécurité.
+## Limites et précautions
+- La synchronisation nécessite un projet Supabase, un compte commun aux appareils et la configuration initiale. Elle se fait à l'ouverture/reprise et environ toutes les minutes, pas instantanément.
+- En cas de modifications simultanées hors ligne, la dernière version horodatée remplace l'autre. Effectue des sauvegardes JSON régulières.
+- Ne mets jamais la clé `service_role` dans l'application ; utilise uniquement la clé publique. Les données synchronisées contiennent potentiellement des coordonnées de clients : protège l'accès à ton compte.
+- L'OCR lit les inscriptions d'une plaque, mais ne garantit pas l'identification visuelle automatique d'un appareil.
