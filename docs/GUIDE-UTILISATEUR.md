@@ -22,16 +22,23 @@ Ouvre l'application installée. La caméra doit être autorisée dans Réglages 
 - Les mouvements sont consultables dans **Locations & tournages**.
 
 ## Sacs et kits
-Crée un sac ou un kit, sélectionne les équipements qui le composent et utilise **Fiche par sac** pour imprimer sa liste de contenu.
+1. Crée un sac ou un kit et ajoute chaque référence avec sa quantité réelle dans le contenant.
+2. Sur sa fiche, utilise **QR du kit** pour générer un QR propre au kit. Imprime-le et colle-le sur le contenant.
+3. En mode **SCAN**, scanne le QR du kit : sa composition s’ouvre en contrôle détaillé.
+4. Scanne ensuite chaque QR matériel du kit : le compteur de la ligne correspondante augmente une unité à la fois. Les boutons + / − permettent aussi un contrôle manuel.
+5. En mode **DÉPART**, le contrôle du kit alimente la liste de départ avec les quantités pointées. En mode **RETOUR**, le contrôle permet d’enregistrer les quantités rendues.
+6. Utilise **Fiche PDF** pour imprimer le contenu attendu du sac.
+
+Les anciens kits restent compatibles : chaque matériel déjà présent dans un ancien kit est considéré comme une unité.
 
 ## Tournages
-Crée un scénario et ajoute les besoins (matériel, quantité, commentaire). Les scénarios peuvent être modifiés et réutilisés pour préparer une journée.
+Crée un scénario et ajoute les besoins en choisissant si possible une référence de l’inventaire (ou en saisissant un besoin libre), la quantité et une note. **Préparer** transforme les références reconnues en liste de départ. Les besoins libres ou non associés sont signalés pour éviter de sortir un matériel approximatif. Le QR du scénario permet aussi de retrouver sa préparation depuis le scanner.
 
 ## Locations
-1. Crée un contrat avec le nom du client, prénom, contact et dates de début / fin.
+1. Dans le panneau **Locations de tournage**, utilise **Nouvelle location** pour créer un contrat avec le nom du client, prénom, contact et dates de début / fin.
 2. Sélectionne les équipements dans l'inventaire et renseigne les quantités.
-3. Ouvre **Départ** pour contrôler les éléments. Le bordereau PDF contient les informations du contrat et les signatures.
-4. Au retour, scanne les objets en mode **RETOUR**.
+3. Ouvre **Départ** pour contrôler les éléments et les quantités réellement sorties. Les sorties partielles sont suivies. Le bordereau PDF contient les informations du contrat et les signatures.
+4. Au retour, scanne les objets en mode **RETOUR** ou scanne le QR d’un kit en mode **RETOUR** puis contrôle chaque élément. Les retours partiels mettent à jour les quantités et le contrat n’est marqué retourné que lorsque tous les éléments prévus sont revenus.
 
 ## Synchronisation Mac ↔ iPhone (Supabase)
 La synchronisation nécessite une configuration unique et un compte commun aux appareils.
@@ -56,3 +63,12 @@ Le bouton **Rechercher par photo** utilise l'OCR pour lire les inscriptions d'un
 - **Restaurer** remplace les données locales par une sauvegarde choisie.
 - **CSV** exporte les fiches d'inventaire.
 - Les fiches PDF sont générées par la fenêtre d'impression : choisis **Enregistrer au format PDF**.
+
+
+## Quantités dans les sacs et kits
+
+Lors de la création d’un sac ou d’un kit, ajoute chaque référence de matériel puis indique le nombre d’exemplaires réellement présents dans ce contenant. La fiche PDF du kit reprend cette quantité (et non la quantité totale de l’inventaire). Les anciens kits restent compatibles : chaque matériel déjà présent dans un ancien kit est considéré comme une unité.
+
+## Scanner et QR codes
+
+Au démarrage de la caméra, l’application déverrouille l’audio à partir du toucher sur le bouton. Chaque scan reconnu déclenche ensuite un bip. Une vibration est demandée si le navigateur expose l’API correspondante ; certains navigateurs iOS ne permettent pas la vibration depuis une page web. En mode DÉPART, la quantité scannée est limitée au stock disponible. Les QR fabricant existants restent reconnus lorsqu’ils sont associés à une fiche.

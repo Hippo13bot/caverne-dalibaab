@@ -4,11 +4,13 @@ Inventaire de matériel audiovisuel, photo, son, informatique et accessoires. Un
 
 ## Fonctionnalités
 - Inventaire avec fiches, photos, catégories, numéros de série, quantités, statuts, garanties, emplacement et notes.
-- Sacs et kits avec fiches PDF par contenant.
+- Sacs et kits avec QR dédié, contrôle détaillé ligne par ligne, quantités par équipement et fiche PDF par contenant.
+- Scanner avec confirmation sonore (après activation par le bouton caméra), vibration si le navigateur et le téléphone la prennent en charge, anti-double-scan et compteur par unité.
+- QR internes plus compacts, plus grands à l’impression et plus faciles à lire.
 - Scanners caméra avec trois modes : **SCAN**, **DÉPART** et **RETOUR**. Les QR fabricant / garantie peuvent être associés aux fiches et réutilisés.
 - Départs validés par scan, changement d'état des équipements, historique des mouvements et bordereau PDF avec coordonnées du bénéficiaire et dates.
-- Locations avec client, prénom, contact, dates, matériel sélectionné et quantités.
-- Scénarios de tournage avec listes de besoins et quantités.
+- Locations avec client, prénom, contact, dates, matériel sélectionné, quantités sorties et retours partiels suivis.
+- Scénarios de tournage avec besoins associés à l’inventaire, quantités et action de préparation directe.
 - OCR de plaque signalétique pour proposer marque, modèle et numéro de série (connexion internet requise ; vérification humaine nécessaire).
 - Export CSV, sauvegarde/restauration JSON, fiches PDF individuelles et inventaire.
 - Stockage local IndexedDB pour rester utilisable hors ligne.
@@ -29,8 +31,8 @@ Inventaire de matériel audiovisuel, photo, son, informatique et accessoires. Un
 1. Pousse le dépôt sur GitHub.
 2. Dans **Actions**, lance « Compiler l'app Mac et Windows » ou crée un tag de version :
    ```bash
-   git tag v1.1.0
-   git push origin v1.1.0
+   git tag v1.3.0
+   git push origin v1.3.0
    ```
 3. Télécharge les installateurs dans les artefacts du workflow ou dans la Release.
 

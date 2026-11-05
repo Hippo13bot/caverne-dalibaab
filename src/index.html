@@ -60,7 +60,7 @@
         <div id="travelList"></div>
       </article>
       <article class="panel">
-        <h3>Locations de tournage</h3>
+        <div class="section-head"><h3>Locations de tournage</h3><button class="btn primary" id="addLoanBtn">＋ Nouvelle location</button></div>
         <p class="muted">Contrat avec client / contact, dates, objectif, et la liste matos préparée.</p>
         <div id="loanList"></div>
       </article>
@@ -139,11 +139,11 @@
 
 <!-- KIT (existing, unchanged) -->
 <dialog id="kitDialog"><form id="kitForm" class="dialog-form">
-  <div class="dialog-head"><div><p class="eyebrow">CONTENANT</p><h2>Créer un sac ou un kit</h2></div><button type="button" class="close" id="closeKit">✕</button></div>
+  <div class="dialog-head"><div><p class="eyebrow">CONTENANT</p><h2 id="kitDialogTitle">Créer un sac ou un kit</h2></div><button type="button" class="close" id="closeKit">✕</button></div>
   <div class="form-grid">
     <label>Nom du kit *<input name="name" required placeholder="Kit tournage A"></label>
     <label>Emplacement<input name="location" placeholder="Étagère, véhicule…"></label>
-    <label class="wide">Équipements<select name="items" id="kitItems" multiple size="7"></select><span class="muted">Maintiens Ctrl (Windows) ou ⌘ (Mac) pour sélectionner plusieurs objets.</span></label>
+    <div class="wide"><label>Équipements et quantités</label><div id="kitRows" class="kit-rows"></div><button type="button" class="btn subtle small" id="addKitRow">＋ Ajouter un équipement</button><p class="muted">Indique le nombre d’exemplaires de chaque matériel présents dans ce sac ou kit.</p></div>
     <label class="wide">Description<textarea name="description" rows="2"></textarea></label>
   </div>
   <div class="dialog-actions"><button type="button" class="btn subtle" id="cancelKit">Annuler</button><button class="btn primary" type="submit">Créer le kit</button></div>
@@ -172,7 +172,7 @@
   <label class="wide">Équipement à préparer (sélectionner dans l'inventaire)</label>
   <select name="items" id="loanItemsSelect" multiple size="7" class="loan-items"></select>
   <p class="muted small">Sélectionne les objets (Ctrl/⌘ pour plusieurs), puis indique les quantités.</p><div id="loanRows" class="loan-rows"></div>
-  <div class="dialog-actions"><button class="btn primary" type="submit">Enregistrer la location</button><button type="button" class="btn subtle" id="addLoanBtn">＋ Ajouter une location</button><button type="button" class="btn subtle" id="cancelLoan">Annuler</button></div>
+  <div class="dialog-actions"><button class="btn primary" type="submit">Enregistrer la location</button><button type="button" class="btn subtle" id="cancelLoan">Annuler</button></div>
 </form></dialog>
 
 <!-- DEPARTURE (new) -->
@@ -181,6 +181,15 @@
   <p class="muted small">Confirme la sortie de ces éléments <span id="departureCount">0</span>. Un PDF sera généré.</p>
   <div id="departureItems" class="loan-items"></div>
   <div class="dialog-actions"><button type="button" class="btn subtle" id="cancelDeparture">Annuler</button><button class="btn primary" id="validateDeparture">Valider & imprimer le PDF</button></div>
+</div></dialog>
+
+<!-- KIT DETAIL CHECK -->
+<dialog id="kitCheckDialog"><div class="dialog-form">
+  <div class="dialog-head"><div><p class="eyebrow">CONTRÔLE DU CONTENU</p><h2 id="kitCheckTitle">Contrôle du kit</h2></div><button type="button" class="close" id="closeKitCheck">✕</button></div>
+  <p id="kitCheckHint" class="muted">Scanne les éléments un par un.</p>
+  <p id="kitCheckProgress" class="kit-check-progress">0 / 0 unités contrôlées</p>
+  <div id="kitCheckRows" class="kit-check-rows"></div>
+  <div class="dialog-actions"><button type="button" class="btn subtle" id="cancelKitCheck">Annuler</button><button type="button" class="btn primary" id="kitCheckComplete" disabled>Valider le contrôle</button></div>
 </div></dialog>
 
 <!-- SCANNER (new, in-page) -->
@@ -202,7 +211,7 @@
   <div class="scanner-log"><div class="muted small">Derniers décodages</div><ul id="scannerLog" class="scanner-log-list"></ul></div>
 </div>
 
-<dialog id="qrDialog"><div class="dialog-form qr-content"><div class="dialog-head"><h2 id="qrTitle">QR matériel</h2><button type="button" class="close" id="closeQR">✕</button></div><img id="qrImage" alt="QR code du matériel"><p class="muted">Ce QR est lié à la fiche matériel. Tu peux aussi conserver et associer le QR de garantie du fabricant.</p><button type="button" class="btn primary" id="printQRBtn">Imprimer le QR</button></div></dialog>
+<dialog id="qrDialog"><div class="dialog-form qr-content"><div class="dialog-head"><h2 id="qrTitle">QR matériel</h2><button type="button" class="close" id="closeQR">✕</button></div><img id="qrImage" alt="QR code du matériel"><p class="muted">Ce QR ouvre la fiche, le kit ou le scénario correspondant. Imprime-le et appose-le sur le matériel ou le contenant.</p><button type="button" class="btn primary" id="printQRBtn">Imprimer le QR</button></div></dialog>
 <script src="qr.js"></script>
 <script src="vendor/html5-qrcode.min.js"></script>
 <script src="app.js"></script>

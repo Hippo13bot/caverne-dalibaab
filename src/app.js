@@ -7,19 +7,25 @@ const STORES = {
   movements: 'caverne_alibaab_movements_v1'
 };
 let items = [], kits = [], travel = [], loans = [], movements = [];
-let editingId = null, editingTravelId = null, editingLoanId = null, photoData = '';
+let editingId = null, editingTravelId = null, editingLoanId = null, editingKitId = null, photoData = '';
 let stateUpdatedAt = new Date().toISOString();
 let departureQueue = [];
 let lastScanValue = '', lastScanAt = 0;
-const statusNames = { stock: 'En stock', loaned: 'Emprunté / sorti', unavailable: 'Indisponible' };
+const statusNames = { stock: 'En stock', loaned: 'Emprunté / sorti', unavailable: 'Indisponible', partial: 'Partiellement sorti' };
 const reasonNames = { repair: 'En réparation', lost: 'Perdu', out_of_service: 'Hors service' };
 const movementNames = { entry: 'Entrée', exit: 'Sortie', return: 'Retour', departure: 'Départ' };
 const travelStatusNames = { draft: 'Brouillon', ready: 'Préparé', in_progress: 'En cours', done: 'Terminé' };
 const loanStatusNames = { draft: 'Brouillon', pending: 'En attente', validated: 'Validé', departed: 'En route', returned: 'Retourné' };
-const loanItemStatusNames = { assigned: 'Prêt', departed: 'Départé', returned: 'Retourné' };
+const loanItemStatusNames = { assigned: 'À préparer', departed: 'Sorti', returned: 'Retourné' };
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ip = s => s == null ? '' : String(s);
+function getAvailableQty(item){return Math.max(0,Number(item.stockQty??(item.status==='stock'?item.quantity:0))||0);}
+function getLoanedQty(item){return Math.max(0,Number(item.loanedQty??(item.status==='loaned'?item.quantity:0))||0);}
+function getUnavailableQty(item){return Math.max(0,Number(item.unavailableQty??(item.status==='unavailable'?item.quantity:0))||0);}
+function displayStatus(item){if(getAvailableQty(item)>0&&getLoanedQty(item)>0)return 'partial';if(getLoanedQty(item)>0)return 'loaned';if(getAvailableQty(item)>0)return 'stock';return 'unavailable';}
+function matchesStatus(item,status){if(status==='all')return true;if(status==='stock')return getAvailableQty(item)>0;if(status==='loaned')return getLoanedQty(item)>0;if(status==='unavailable')return getUnavailableQty(item)>0;return item.status===status;}
+function ensureItemQtyState(item){if(item.stockQty==null&&item.loanedQty==null&&item.unavailableQty==null){const q=Math.max(1,Number(item.quantity)||1);item.stockQty=item.status==='stock'?q:0;item.loanedQty=item.status==='loaned'?q:0;item.unavailableQty=item.status==='unavailable'?q:0;}return item;}
 function openFromHash(){
   const m=location.hash.match(/^#item=(.+)$/);
   if(m){ const id=decodeURIComponent(m[1]); history.replaceState(null,'',location.pathname+location.search); if(items.some(i=>i.id===id)) openEdit(id); else alert("Cette fiche n'existe pas sur cet appareil. Restaure d'abord une sauvegarde."); }
@@ -78,10 +84,10 @@ function render(){
   renderKitsPrintBtn();
 }
 function renderStats(){
-  $('#statTotal').textContent = items.length;
-  $('#statStock').textContent = items.filter(x=>x.status==='stock').length;
-  $('#statLoaned').textContent = items.filter(x=>x.status==='loaned').length;
-  $('#statUnavailable').textContent = items.filter(x=>x.status==='unavailable').length;
+  $('#statTotal').textContent = items.reduce((n,x)=>n+Math.max(1,Number(x.quantity)||1),0);
+  $('#statStock').textContent = items.reduce((n,x)=>n+(x.stockQty!=null?Number(x.stockQty)||0:(x.status==='stock'?Math.max(1,Number(x.quantity)||1):0)),0);
+  $('#statLoaned').textContent = items.reduce((n,x)=>n+(x.loanedQty!=null?Number(x.loanedQty)||0:(x.status==='loaned'?Math.max(1,Number(x.quantity)||1):0)),0);
+  $('#statUnavailable').textContent = items.reduce((n,x)=>n+(x.unavailableQty!=null?Number(x.unavailableQty)||0:(x.status==='unavailable'?Math.max(1,Number(x.quantity)||1):0)),0);
 }
 function renderKitsPrintBtn(){
   $('#printKitsBtn').onclick=()=>{ if(!kits.length)return alert('Aucun sac ou kit.'); kits.forEach(k=>printKit(k)); };
@@ -91,39 +97,29 @@ function renderInventory(){
   const cats=[...new Set(items.map(x=>x.category).filter(Boolean))].sort();
   $('#categoryFilter').innerHTML='<option value="all">Toutes catégories</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   $('#categoryFilter').value=cats.includes(cf)?cf:'all';
-  const filtered=items.filter(x=>(sf==='all'||x.status===sf)&&(cf==='all'||x.category===cf)&&[x.name,x.brand,x.model,x.serial,x.category,x.location,x.holder].join(' ').toLowerCase().includes(q));
-  $('#count').textContent=`${filtered.length} équipement(s)`;
-  $('#inventory').innerHTML=filtered.length?filtered.map(x=>`<article class="item-card">${x.photo?`<img src="${x.photo}" alt="">`:''}<div class="item-meta"><span class="pill">${esc(x.category)}</span><span class="pill ${esc(x.status)}">${statusNames[x.status]}</span></div><h3>${esc(x.name)}</h3><p>${esc([x.brand,x.model].filter(Boolean).join(' · ')||'Modèle non renseigné')}<br>${x.serial?'N° série : '+esc(x.serial):'Sans numéro de série'}<br>${x.location?'Emplacement : '+esc(x.location):'Emplacement non renseigné'}${x.holder?'<br>Avec : '+esc(x.holder):''}${x.dueDate?'<br>Retour prévu : '+esc(x.dueDate):''}${x.status==='unavailable'&&x.reason?'<br>'+reasonNames[x.reason]:''}</p><div class="card-actions"><button class="btn subtle" data-edit="${x.id}">Modifier</button><button class="btn subtle" data-qr="${x.id}">QR code</button><button class="btn subtle" data-print="${x.id}">Fiche PDF</button><button class="btn subtle" data-printloan="${x.id}">Fiche location</button><button class="btn subtle" data-delete="${x.id}">Supprimer</button></div></article>`).join(''):'<div class="empty">Aucun équipement correspondant. Ajoute ton matériel.</div>';
+  const filtered=items.filter(x=>matchesStatus(x,sf)&&(cf==='all'||x.category===cf)&&[x.name,x.brand,x.model,x.serial,x.category,x.location,x.holder].join(' ').toLowerCase().includes(q));
+  $('#count').textContent=`${filtered.length} référence(s) · ${filtered.reduce((n,x)=>n+Math.max(1,Number(x.quantity)||1),0)} unité(s)`;
+  $('#inventory').innerHTML=filtered.length?filtered.map(x=>`<article class="item-card">${x.photo?`<img src="${x.photo}" alt="">`:''}<div class="item-meta"><span class="pill">${esc(x.category)}</span><span class="pill ${esc(displayStatus(x)==='partial'?'loaned':displayStatus(x))}">${statusNames[displayStatus(x)]}</span></div><h3>${esc(x.name)}</h3><p>${esc([x.brand,x.model].filter(Boolean).join(' · ')||'Modèle non renseigné')}<br>Quantité totale : ${Math.max(1,Number(x.quantity)||1)}${x.stockQty!=null||x.loanedQty!=null?`<br>En stock : ${Number(x.stockQty)||0} · Sorti : ${Number(x.loanedQty)||0}`:''}<br>${x.serial?'N° série : '+esc(x.serial):'Sans numéro de série'}<br>${x.location?'Emplacement : '+esc(x.location):'Emplacement non renseigné'}${x.holder?'<br>Avec : '+esc(x.holder):''}${x.dueDate?'<br>Retour prévu : '+esc(x.dueDate):''}${x.status==='unavailable'&&x.reason?'<br>'+reasonNames[x.reason]:''}</p><div class="card-actions"><button class="btn subtle" data-edit="${x.id}">Modifier</button><button class="btn subtle" data-qr="${x.id}">QR code</button><button class="btn subtle" data-print="${x.id}">Fiche PDF</button><button class="btn subtle" data-printloan="${x.id}">Fiche location</button><button class="btn subtle" data-delete="${x.id}">Supprimer</button></div></article>`).join(''):'<div class="empty">Aucun équipement correspondant. Ajoute ton matériel.</div>';
 }
+function kitEntries(kit){const grouped=new Map();(kit.items||[]).forEach(entry=>{const itemId=typeof entry==='string'?entry:(entry.itemId||entry.id);if(!itemId)return;const qty=typeof entry==='string'?1:Math.max(1,Number(entry.qty)||1);grouped.set(itemId,(grouped.get(itemId)||0)+qty);});return [...grouped].map(([itemId,qty])=>({itemId,qty}));}
+
 function renderKits(){
-  $('#kits').innerHTML=kits.length?kits.map(k=>`<article class="item-card"><div class="item-meta"><span class="pill">SAC / KIT</span><span class="pill">${(k.items||[]).length} élément(s)</span></div><h3>${esc(k.name)}</h3><p>${esc(k.location||'Emplacement non renseigné')}<br>${esc(k.description||'')}<br>${(k.items||[]).map(id=>items.find(x=>x.id===id)?.name).filter(Boolean).map(esc).join(' · ')}</p><div class="card-actions"><button class="btn subtle" data-kit-delete="${k.id}">Supprimer le kit</button><button class="btn subtle" data-printkit="${k.id}">Fiche par sac</button></div></article>`).join('') : '<div class="empty">Aucun sac ou kit. Crée un kit pour regrouper ton matériel.</div>';
+  $('#kits').innerHTML=kits.length?kits.map(k=>{const entries=kitEntries(k),units=entries.reduce((n,e)=>n+e.qty,0);return `<article class="item-card"><div class="item-meta"><span class="pill">SAC / KIT</span><span class="pill">${entries.length} référence(s) · ${units} unité(s)</span></div><h3>${esc(k.name)}</h3><p>${esc(k.location||'Emplacement non renseigné')}<br>${esc(k.description||'')}<br>${entries.map(e=>{const x=items.find(i=>i.id===e.itemId);return x?`${esc(x.name)} × ${e.qty}`:''}).filter(Boolean).join(' · ')}</p><div class="card-actions"><button class="btn subtle" data-kit-qr="${k.id}">QR du kit</button><button class="btn subtle" data-kit-check="${k.id}">Contrôler</button><button class="btn subtle" data-kit-edit="${k.id}">Modifier</button><button class="btn subtle" data-kit-delete="${k.id}">Supprimer</button><button class="btn subtle" data-printkit="${k.id}">Fiche PDF</button></div></article>`}).join('') : '<div class="empty">Aucun sac ou kit. Crée un kit pour regrouper ton matériel.</div>';
 }
 function renderTravel(){
   const list=$('#travelList');
   if(!travel.length){ list.innerHTML='<p class="muted small">Aucun scénario. Crée un « mat d\'emats » pour te préparer une journée.</p>'; return; }
-  list.innerHTML = travel.map(t=>`<article class="item-card travel-card"><div class="item-meta"><span class="pill">TOURNAGE</span><span class="pill ${esc(t.status||'draft')}">${esc(travelStatusNames[t.status||'draft'])}</span></div><div><h3>${esc(t.name)}</h3><p>${esc(t.notes||'')}</p><p class="muted small">${(t.needs||[]).map(n=>esc(n.label)+' ×'+(n.qty||1)).join(' · ')||'Aucun besoin renseigné'}</p></div><div class="card-actions"><button class="btn subtle" data-travel-qr="${t.id}">QR scénario</button><button class="btn subtle" data-travel-edit="${t.id}">Éditer</button><button class="btn subtle" data-travel-delete="${t.id}">Supprimer</button></div></article>`).join('');
+  list.innerHTML = travel.map(t=>`<article class="item-card travel-card"><div class="item-meta"><span class="pill">TOURNAGE</span><span class="pill ${esc(t.status||'draft')}">${esc(travelStatusNames[t.status||'draft'])}</span></div><div><h3>${esc(t.name)}</h3><p>${esc(t.notes||'')}</p><p class="muted small">${(t.needs||[]).map(n=>esc(n.label)+' ×'+(n.qty||1)).join(' · ')||'Aucun besoin renseigné'}</p></div><div class="card-actions"><button class="btn subtle" data-travel-prepare="${t.id}">Préparer</button><button class="btn subtle" data-travel-qr="${t.id}">QR scénario</button><button class="btn subtle" data-travel-edit="${t.id}">Éditer</button><button class="btn subtle" data-travel-delete="${t.id}">Supprimer</button></div></article>`).join('');
 }
 function renderLoans(){
   const list=$('#loanList');
-  if(!loans.length){ list.innerHTML='<p class="muted small">Aucune location. Crée un contrat de tournage.</p>'; return; }
-  list.innerHTML = loans.map(l=>`
-  <article class="item-card loan-card">
-    <div class="item-meta">
-      <span class="pill">LOCATION</span><span class="pill ${esc(l.status)}">${esc(loanStatusNames[l.status])}</span>
-    </div>
-    <div class="loan-head">
-      <div><h3>${esc(l.client||'')} ${esc(l.firstname||'')}</h3><p>${esc(l.objectif||'')}</p></div>
-      <div class="loan-dates"><strong>${esc(ip(l.startDate)||'—')}</strong> → <strong>${esc(ip(l.endDate)||'—')}</strong></div>
-    </div>
-    <p class="muted small">Contact : ${esc(l.contact||'—')}</p>
-    <div class="loan-items">${l.items?.map(it=>`<div class="loan-item-row"><span class="pill ${esc(it.status)}">${esc(loanItemStatusNames[it.status])}</span><span>${esc(it.name||'?')}</span><span class="muted small">×${it.qty||1}</span></div>`).join('')||'<p class="muted small">Aucun matériel préparé.</p>'}</div>
-    <div class="card-actions" style="margin-top:8px">
-      <button class="btn subtle" data-loan-edit="${l.id}">Modifier</button>
-      <button class="btn subtle" data-loan-depart="${l.id}">Départ</button>
-      <button class="btn subtle" data-loan-print="${l.id}">Fiche PDF</button>
-      <button class="btn subtle" data-loan-delete="${l.id}">Supprimer</button>
-    </div>
-  </article>`).join('');
+  if(!loans.length){ list.innerHTML='<p class="muted small">Aucune location. Utilise « Nouvelle location » pour créer un contrat.</p>'; return; }
+  const today=new Date().toISOString().slice(0,10);
+  list.innerHTML = loans.map(l=>{
+    const late=l.status==='departed'&&l.endDate&&l.endDate<today;
+    const rows=(l.items||[]).map(it=>`<div class="loan-item-row"><span class="pill ${esc(it.status||'assigned')}">${esc(loanItemStatusNames[it.status]||'À préparer')}</span><span>${esc(it.name||'?')}</span><span class="muted small">Prévu ${it.qty||1} · Sorti ${it.departedQty||0} · Rendu ${it.returnedQty||0}</span></div>`).join('');
+    return `<article class="item-card loan-card"><div class="item-meta"><span class="pill">LOCATION</span><span class="pill ${esc(l.status||'draft')}">${esc(loanStatusNames[l.status]||'Brouillon')}</span>${late?'<span class="pill unavailable">EN RETARD</span>':''}</div><div class="loan-head"><div><h3>${esc(l.client||'')} ${esc(l.firstname||'')}</h3><p>${esc(l.objectif||'')}</p></div><div class="loan-dates"><strong>${esc(ip(l.startDate)||'—')}</strong> → <strong>${esc(ip(l.endDate)||'—')}</strong></div></div><p class="muted small">Contact : ${esc(l.contact||'—')}${late?' · Date de retour dépassée':''}</p><div class="loan-items">${rows||'<p class="muted small">Aucun matériel préparé.</p>'}</div><div class="card-actions" style="margin-top:8px"><button class="btn subtle" data-loan-edit="${l.id}">Modifier</button><button class="btn subtle" data-loan-depart="${l.id}">Départ / compléter</button><button class="btn subtle" data-loan-print="${l.id}">Fiche PDF</button><button class="btn subtle" data-loan-delete="${l.id}">Supprimer</button></div></article>`;
+  }).join('');
 }
 function renderMovements(){
   const list=$('#movementList');
@@ -142,11 +138,13 @@ function renderMovements(){
 function initTravelForm(){
   $('#addTravelBtn').onclick=()=>{ editingTravelId=null; $('#travelDialogTitle').textContent='Nouveau scénario'; resetTravel(); $('#travelDialog').showModal(); };
   $('#closeTravel').onclick=$('#cancelTravel').onclick=()=>$('#travelDialog').close();
-  $('#travelForm').onsubmit=e=>{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); d.needs=[]; const rows=$('#travelItems').querySelectorAll('.travel-row'); rows.forEach(r=>{ const label=r.querySelector('.travel-label').value.trim(); if(label){ d.needs.push({ label, qty: Math.max(1, Number(r.querySelector('.travel-qty').value)||1), notes: r.querySelector('.travel-notes').value.trim() }); } });
+  $('#travelForm').onsubmit=e=>{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); d.needs=[]; const rows=$('#travelItems').querySelectorAll('.travel-row'); rows.forEach(r=>{ const label=r.querySelector('.travel-label').value.trim(); if(label){ d.needs.push({ itemId:r.querySelector('.travel-item-select')?.value||'', label, qty: Math.max(1, Number(r.querySelector('.travel-qty').value)||1), notes: r.querySelector('.travel-notes').value.trim() }); } });
   const old=travel.find(x=>x.id===editingTravelId); d.id=editingTravelId||uid(); d.status=old?.status||'draft'; travel=old?travel.map(x=>x.id===d.id?{...old,...d}:x):[...travel,d]; editingTravelId=null; saveAll(); $('#travelDialog').close(); renderTravel(); };
-  $('#addTravelItem').onclick=()=>{ const list=document.getElementById('travelItems'); const row=document.createElement('div'); row.className='travel-row'; row.innerHTML=`<input class="travel-label" placeholder="Ex. : Canon FX3 + 2 objectifs" style="flex:1"><input class="travel-qty" type="number" min="1" value="1" style="width:80px"><input class="travel-notes" placeholder="Requis / commentaire" style="width:220px"><button type="button" class="btn subtle small" id="removeTravelItem">Supprimer</button>`; list.appendChild(row); row.querySelector('#removeTravelItem').onclick=()=>row.remove(); };
+  $('#addTravelItem').onclick=()=>addTravelItemRow();
 }
 function resetTravel(){ $('#travelForm').reset(); $('#travelItems').innerHTML=''; }
+function addTravelItemRow(initial={}){const row=document.createElement('div');row.className='travel-row';const options=items.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} · ${esc(x.model||x.category||'')}</option>`).join('');row.innerHTML=`<select class="travel-item-select" aria-label="Équipement de l'inventaire"><option value="">Choisir dans l’inventaire…</option>${options}</select><input class="travel-label" placeholder="Ou saisir un besoin libre" value="${esc(initial.label||'')}" style="flex:1"><input class="travel-qty" type="number" min="1" value="${Math.max(1,Number(initial.qty)||1)}" style="width:76px"><input class="travel-notes" placeholder="Note" value="${esc(initial.notes||'')}" style="width:150px"><button type="button" class="btn subtle small" aria-label="Supprimer">✕</button>`;const select=row.querySelector('.travel-item-select');select.value=initial.itemId||'';if(initial.itemId&&!select.value){const found=items.find(x=>x.id===initial.itemId);if(found)select.value=found.id;}select.onchange=()=>{const x=items.find(i=>i.id===select.value);if(x)row.querySelector('.travel-label').value=x.name;};row.querySelector('button').onclick=()=>row.remove();$('#travelItems').appendChild(row);}
+
 function fillTravelRows(travelFromDb){
   const t = travelFromDb || { name:'', notes:'', needs:[] };
   // filled at open
@@ -156,21 +154,23 @@ function fillTravelRows(travelFromDb){
 function initLoanForm(){
   $('#addLoanBtn').onclick=()=>{ editingLoanId=null; $('#loanDialogTitle').textContent='Nouveau contrat'; refreshLoanOptions(); renderLoans(); resetLoan(); $('#loanDialog').showModal(); };
   $('#closeLoan').onclick=$('#cancelLoan').onclick=()=>$('#loanDialog').close();
-  $('#loanForm').onsubmit=e=>{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); d.items=[]; const rows=$('#loanRows').querySelectorAll('.loan-row'); rows.forEach(r=>{ const itemId=r.dataset.itemId||''; const obj=items.find(x=>x.id===itemId); const name=r.querySelector('.loan-name').value.trim(); if(name){ d.items.push({ itemId, name:obj?.name||name, brand:obj?.brand||'', model:obj?.model||'', qty:Math.max(1,Number(r.querySelector('.loan-qty').value)||1), status:'assigned' }); } });
-  const old=loans.find(x=>x.id===editingLoanId); d.id=editingLoanId||uid(); d.status=old?.status||'draft'; d.createdAt=old?.createdAt||new Date().toISOString(); loans=old?loans.map(x=>x.id===d.id?{...old,...d}:x):[...loans,d]; editingLoanId=null; saveAll(); $('#loanDialog').close(); renderLoans(); };
+  $('#loanForm').onsubmit=e=>{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); d.items=[]; const rows=$('#loanRows').querySelectorAll('.loan-row'); rows.forEach(r=>{ const itemId=r.dataset.itemId||''; const obj=items.find(x=>x.id===itemId); const name=r.querySelector('.loan-name').value.trim(); if(name){ { const prior=(loans.find(x=>x.id===editingLoanId)?.items||[]).find(it=>it.itemId===itemId); d.items.push({ itemId, name:obj?.name||name, brand:obj?.brand||'', model:obj?.model||'', qty:Math.max(1,Number(r.querySelector('.loan-qty').value)||1), status:prior?.status||'assigned', departedQty:prior?.departedQty||0, returnedQty:prior?.returnedQty||0 }); } } });
+  const old=loans.find(x=>x.id===editingLoanId);if(old){(old.items||[]).forEach(prior=>{const stillThere=d.items.find(it=>it.itemId===prior.itemId);if(Number(prior.departedQty||0)>Number(prior.returnedQty||0)&&!stillThere)d.items.push(prior);else if(stillThere)stillThere.qty=Math.max(Number(stillThere.qty)||1,Number(prior.departedQty)||0);});}d.id=editingLoanId||uid(); d.status=old?.status||'draft'; d.createdAt=old?.createdAt||new Date().toISOString(); loans=old?loans.map(x=>x.id===d.id?{...old,...d}:x):[...loans,d]; editingLoanId=null; saveAll(); $('#loanDialog').close(); renderLoans(); };
   $('#itemForm').onsubmit=e=>{
-    try{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); if(photoData) d.photo=photoData; const id=editingId||uid(); const old=items.find(x=>x.id===id); d.id=id; d.status=d.status||'stock'; if(!d.externalQr&&old?.externalQr)d.externalQr=old.externalQr; if(!d.photo&&old?.photo)d.photo=old.photo; items=old?items.map(x=>x.id===id?{...x,...d}:x):[...items,d]; editingId=null; photoData=''; saveAll(); $('#itemDialog').close(); render(); refreshLoanOptions(); }
+    try{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); if(photoData) d.photo=photoData; const id=editingId||uid(); const old=items.find(x=>x.id===id); d.id=id; d.status=d.status||'stock'; if(old&&(old.stockQty!=null||old.loanedQty!=null||old.unavailableQty!=null)){const total=Math.max(1,Number(d.quantity)||1);d.loanedQty=Number(old.loanedQty)||0;d.unavailableQty=Number(old.unavailableQty)||0;if(total<d.loanedQty+d.unavailableQty)throw Error(`La quantité totale ne peut pas être inférieure aux unités déjà sorties ou indisponibles (${d.loanedQty+d.unavailableQty}).`);d.stockQty=total-d.loanedQty-d.unavailableQty;d.quantity=total;d.status=d.loanedQty>0?'loaned':d.stockQty>0?'stock':'unavailable';} if(!d.externalQr&&old?.externalQr)d.externalQr=old.externalQr; if(!d.photo&&old?.photo)d.photo=old.photo; items=old?items.map(x=>x.id===id?{...x,...d}:x):[...items,d]; editingId=null; photoData=''; saveAll(); $('#itemDialog').close(); render(); refreshLoanOptions(); }
     catch(err){ console.error('itemForm submit ERR',err); alert('Impossible d’enregistrer cette fiche : '+err.message); }
   };
   $('#closeItem').onclick=$('#cancelItem').onclick=()=>{editingId=null;$('#itemDialog').close();}; $('#itemDialog').addEventListener('close',()=>{editingId=null;});
-  $('#addKitBtn').onclick=()=>{ $('#kitForm').reset(); refreshKitOptions(); $('#kitDialog').showModal(); };
-  $('#closeKit').onclick=$('#cancelKit').onclick=()=>$('#kitDialog').close();
-  $('#kitForm').onsubmit=e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.currentTarget).entries());const selected=[...$('#kitItems').selectedOptions].map(o=>o.value);kits.push({id:uid(),name:d.name,location:d.location||'',description:d.description||'',items:selected});saveAll();$('#kitDialog').close();};
+  $('#addKitBtn').onclick=()=>{ editingKitId=null;$('#kitDialogTitle').textContent='Créer un sac ou un kit';$('#kitForm').reset(); $('#kitRows').innerHTML=''; refreshKitOptions(); addKitItemRow(); $('#kitDialog').showModal(); };
+  $('#addKitRow').onclick=addKitItemRow;
+  $('#closeKit').onclick=$('#cancelKit').onclick=()=>{editingKitId=null;$('#kitDialog').close();};
+  $('#kitForm').onsubmit=e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.currentTarget).entries());const selected=[...$('#kitRows').querySelectorAll('.kit-row')].map(r=>({itemId:r.querySelector('.kit-item-select').value,qty:Math.max(1,Number(r.querySelector('.kit-item-qty').value)||1)})).filter(x=>x.itemId);const kit={id:editingKitId||uid(),name:d.name,location:d.location||'',description:d.description||'',items:selected};kits=editingKitId?kits.map(k=>k.id===editingKitId?kit:k):[...kits,kit];editingKitId=null;saveAll();$('#kitDialog').close();};
   // dynamic rows
   refreshLoanOptions(); $('#loanItemsSelect').onchange=fillLoanRows; $('#loanRows').innerHTML='';
 }
 function refreshLoanOptions(){ const sel=$('#loanItemsSelect'); if(!sel)return; const selected=new Set([...sel.selectedOptions].map(o=>o.value)); sel.innerHTML=items.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} — ${esc(x.model||x.category||'')}</option>`).join(''); [...sel.options].forEach(o=>o.selected=selected.has(o.value)); }
-function refreshKitOptions(){ const sel=$('#kitItems'); if(sel)sel.innerHTML=items.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} — ${esc(x.model||x.category||'')}</option>`).join(''); }
+function refreshKitOptions(){ return items.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} — ${esc(x.model||x.category||'')}</option>`).join(''); }
+function addKitItemRow(){const row=document.createElement('div');row.className='kit-row';row.innerHTML=`<select class="kit-item-select" aria-label="Matériel"><option value="">Choisir un matériel…</option>${refreshKitOptions()}</select><input class="kit-item-qty" type="number" min="1" value="1" aria-label="Quantité dans le kit"><button type="button" class="btn subtle small" aria-label="Supprimer la ligne">✕</button>`;row.querySelector('button').onclick=()=>row.remove();$('#kitRows').appendChild(row);}
 function openEdit(id){ const x=items.find(i=>i.id===id); if(!x)return; editingId=id; photoData=''; resetForm(); $('#dialogTitle').textContent='Modifier le matériel'; for(const [k,v] of Object.entries(x)){const el=$('#itemForm').elements.namedItem(k);if(el&&el.type!=='file')el.value=v??'';} if(x.photo){$('#photoPreview').src=x.photo;$('#photoPreview').hidden=false;} $('#itemDialog').showModal(); }
 function resetLoan(){ $('#loanForm').reset(); $('#loanRows').innerHTML=''; }
 function resetForm(){ $('#itemForm').reset(); $('#photoPreview').hidden=true; photoData=''; }
@@ -189,29 +189,33 @@ function fillLoanRows(){
 }
 function renumberLoanSelected(){ /* pas besoin */ }
 
-function qrLink(id){ return `${location.origin==='null'?'caverne-alibaab:item':location.origin+location.pathname+'#item'}=${encodeURIComponent(id)}`; }
-function makeQR(value){ const qr=new QRCodeLib(0,0); qr.addData(String(value)); qr.make(); const count=qr.getModuleCount(), scale=6, margin=4, canvas=document.createElement('canvas'); canvas.width=canvas.height=(count+margin*2)*scale; const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#111';for(let r=0;r<count;r++)for(let c=0;c<count;c++)if(qr.isDark(r,c))ctx.fillRect((c+margin)*scale,(r+margin)*scale,scale,scale);return canvas.toDataURL('image/png'); }
+function qrLink(id){ return String(id); }
+function makeQR(value){ const qr=new QRCodeLib(0,0); qr.addData(String(value)); qr.make(); const count=qr.getModuleCount(), scale=10, margin=6, canvas=document.createElement('canvas'); canvas.width=canvas.height=(count+margin*2)*scale; const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#111';for(let r=0;r<count;r++)for(let c=0;c<count;c++)if(qr.isDark(r,c))ctx.fillRect((c+margin)*scale,(r+margin)*scale,scale,scale);return canvas.toDataURL('image/png'); }
 
 // Attach form open/close to public buttons
 document.addEventListener('click', async (e)=>{
   const edit=e.target.closest('[data-edit]'); if(edit){ openEdit(edit.dataset.edit); return; }
-  const del=e.target.closest('[data-delete]'); if(del){ if(confirm('Supprimer définitivement cette fiche ?')){ items=items.filter(x=>x.id!==del.dataset.delete); kits=kits.map(k=>({...k,items:(k.items||[]).filter(id=>id!==del.dataset.delete)})); saveAll(); } return; }
+  const del=e.target.closest('[data-delete]'); if(del){ if(confirm('Supprimer définitivement cette fiche ?')){ items=items.filter(x=>x.id!==del.dataset.delete); kits=kits.map(k=>({...k,items:(k.items||[]).filter(entry=>(typeof entry==='string'?entry:(entry.itemId||entry.id))!==del.dataset.delete)})); saveAll(); } return; }
   const qr=e.target.closest('[data-qr]'); if(qr){ const x=items.find(i=>i.id===qr.dataset.qr); const data=makeQR(qrLink(x.id)); $('#qrTitle').textContent=x.name; $('#qrImage').src=data; $('#qrDialog').showModal(); return; }
   const pr=e.target.closest('[data-print]'); if(pr){ const x=items.find(i=>i.id===pr.dataset.print); printItems([x],true); return; }
   const prl=e.target.closest('[data-printloan]'); if(prl){ const l=loans.find(x=>x.id===prl.dataset.printloan); if(l) printLoan(l); return; }
+  const ke=e.target.closest('[data-kit-edit]');if(ke){const k=kits.find(x=>x.id===ke.dataset.kitEdit);if(k){editingKitId=k.id;$('#kitDialogTitle').textContent='Modifier le kit';$('#kitForm').reset();$('#kitRows').innerHTML='';$('#kitForm').elements.name.value=k.name||'';$('#kitForm').elements.location.value=k.location||'';$('#kitForm').elements.description.value=k.description||'';kitEntries(k).forEach(entry=>{addKitItemRow();const row=$('#kitRows').lastElementChild;row.querySelector('.kit-item-select').value=entry.itemId;row.querySelector('.kit-item-qty').value=entry.qty;});if(!kitEntries(k).length)addKitItemRow();$('#kitDialog').showModal();}return;}
+  const kqr=e.target.closest('[data-kit-qr]'); if(kqr){const k=kits.find(x=>x.id===kqr.dataset.kitQr);if(k){$('#qrTitle').textContent='Kit · '+k.name;$('#qrImage').src=makeQR('caverne-alibaab:kit='+k.id);$('#qrDialog').showModal();}return;}
+  const kcheck=e.target.closest('[data-kit-check]'); if(kcheck){const k=kits.find(x=>x.id===kcheck.dataset.kitCheck);if(k){openKitCheck(k,scannerMode==='return'?'return':scannerMode==='depart'?'depart':'inspect');}return;}
   const kd=e.target.closest('[data-kit-delete]'); if(kd){ if(confirm('Supprimer ce kit ?')){ kits=kits.filter(k=>k.id!==kd.dataset.kitDelete); saveAll(); } return; }
   const pk=e.target.closest('[data-printkit]'); if(pk){ const k=kits.find(x=>x.id===pk.dataset.printkit); if(k) printKit(k); return; }
+  const tp=e.target.closest('[data-travel-prepare]'); if(tp){const t=travel.find(x=>x.id===tp.dataset.travelPrepare);if(t){t.status='ready';const missing=[];(t.needs||[]).forEach(n=>{const obj=items.find(i=>n.itemId&&i.id===n.itemId)||items.find(i=>i.name.trim().toLowerCase()===String(n.label||'').trim().toLowerCase());if(!obj){missing.push(n.label);return;}const q=departureQueue.find(z=>z.itemId===obj.id);if(q)q.qty+=Math.max(1,Number(n.qty)||1);else departureQueue.push({itemId:obj.id,name:obj.name,qty:Math.max(1,Number(n.qty)||1),status:'assigned'});});if(missing.length)alert('Besoins à associer à un équipement de l’inventaire :\n'+missing.join('\n'));saveAll();if(departureQueue.length){populateDeparture();$('#departureDialog').showModal();}}return;}
   const tq=e.target.closest('[data-travel-qr]'); if(tq){const t=travel.find(x=>x.id===tq.dataset.travelQr);if(t){$('#qrTitle').textContent='Scénario · '+t.name;$('#qrImage').src=makeQR('caverne-alibaab:travel='+t.id);$('#qrDialog').showModal();}return;}
-  const td=e.target.closest('[data-travel-edit]'); if(td){ const t=travel.find(x=>x.id===td.dataset.travelEdit); if(t){ editingTravelId=t.id; resetTravel(); $('#travelDialogTitle').textContent='Modifier le scénario'; $('#travelForm').elements.name.value=t.name||''; $('#travelForm').elements.notes.value=t.notes||''; (t.needs||[]).forEach(n=>{ $('#addTravelItem').click(); const r=$('#travelItems').lastElementChild; r.querySelector('.travel-label').value=n.label||''; r.querySelector('.travel-qty').value=n.qty||1; r.querySelector('.travel-notes').value=n.notes||''; }); $('#travelDialog').showModal(); } return; }
+  const td=e.target.closest('[data-travel-edit]'); if(td){ const t=travel.find(x=>x.id===td.dataset.travelEdit); if(t){ editingTravelId=t.id; resetTravel(); $('#travelDialogTitle').textContent='Modifier le scénario'; $('#travelForm').elements.name.value=t.name||''; $('#travelForm').elements.notes.value=t.notes||''; (t.needs||[]).forEach(n=>addTravelItemRow(n)); $('#travelDialog').showModal(); } return; }
   const rev=e.target.closest('[data-travel-delete]'); if(rev){ if(confirm('Supprimer ce scénario ?')){ travel=travel.filter(x=>x.id!==rev.dataset.travelDelete); saveAll(); } return; }
   const ld=e.target.closest('[data-loan-edit]'); if(ld){ const l=loans.find(x=>x.id===ld.dataset.loanEdit); if(l){ editingLoanId=l.id; refreshLoanOptions(); resetLoan(); $('#loanDialogTitle').textContent='Modifier la location'; for(const k of ['client','firstname','contact','startDate','endDate','objectif']) $('#loanForm').elements[k].value=l[k]||''; const sel=$('#loanItemsSelect'); const mapped=(l.items||[]).map(it=>({...it,itemId:it.itemId||items.find(x=>x.name===it.name)?.id||''})); [...sel.options].forEach(o=>o.selected=mapped.some(it=>it.itemId===o.value)); fillLoanRows(); mapped.forEach(it=>{let r=[...$('#loanRows').children].find(row=>row.dataset.itemId===it.itemId);if(!r){r=document.createElement('div');r.className='loan-row';r.dataset.itemId=it.itemId||'';r.innerHTML=`<input class="loan-name" value="${esc(it.name||'Matériel') }" ${it.itemId?'disabled':''} style="flex:1"><input class="loan-qty" type="number" min="1" value="1" style="width:80px"><button type="button" class="btn subtle small">✕</button>`;$('#loanRows').appendChild(r);r.querySelector('button').onclick=()=>r.remove();}r.querySelector('.loan-qty').value=it.qty||1;}); $('#loanDialog').showModal(); } return; }
-  const lv=e.target.closest('[data-loan-delete]'); if(lv){ if(confirm('Supprimer cette location ?')){ loans=loans.filter(x=>x.id!==lv.dataset.loanDelete); saveAll(); } return; }
-  const dp=e.target.closest('[data-loan-depart]'); if(dp){ const l=loans.find(x=>x.id===dp.dataset.loanDepart); if(l){ populateDeparture(l); $('#departureDialog').showModal(); } return; }
+  const lv=e.target.closest('[data-loan-delete]'); if(lv){ const l=loans.find(x=>x.id===lv.dataset.loanDelete); if(l&&l.status==='departed'){alert('Cette location contient du matériel sorti. Enregistre d’abord tous les retours avant de pouvoir supprimer le contrat.');return;} if(confirm('Supprimer cette location ?')){ loans=loans.filter(x=>x.id!==lv.dataset.loanDelete); saveAll(); } return; }
+  const dp=e.target.closest('[data-loan-depart]'); if(dp){ const l=loans.find(x=>x.id===dp.dataset.loanDepart); if(l){const pending=(l.items||[]).some(it=>(Number(it.qty)||1)>(Number(it.departedQty)||0));if(!pending){alert('Tout le matériel prévu a déjà été déclaré sorti. Pour le retour, utilise le scanner en mode RETOUR.');return;}populateDeparture(l); $('#departureDialog').showModal(); } return; }
   const lp=e.target.closest('[data-loan-print]'); if(lp){ const l=loans.find(x=>x.id===lp.dataset.loanPrint); if(l) printLoan(l); return; }
 });
 
 $('#closeQR')?.addEventListener('click',()=>$('#qrDialog').close());
-$('#printQRBtn')?.addEventListener('click',()=>{const w=window.open('','_blank');if(!w)return alert('Autorise les fenêtres surgissantes pour imprimer le QR.');w.document.write(`<!doctype html><html><head><title>${esc($('#qrTitle').textContent)}</title><style>body{font-family:Arial;text-align:center;padding:30px}img{width:300px;height:300px;object-fit:contain}h2{font-size:20px}</style></head><body><h2>${esc($('#qrTitle').textContent)}</h2><img src="${$('#qrImage').src}"><script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();});
+$('#printQRBtn')?.addEventListener('click',()=>{const w=window.open('','_blank');if(!w)return alert('Autorise les fenêtres surgissantes pour imprimer le QR.');w.document.write(`<!doctype html><html><head><title>${esc($('#qrTitle').textContent)}</title><style>body{font-family:Arial;text-align:center;padding:30px}img{width:420px;height:420px;object-fit:contain;image-rendering:pixelated}h2{font-size:20px}</style></head><body><h2>${esc($('#qrTitle').textContent)}</h2><img src="${$('#qrImage').src}"><script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();});
 
 // ---------- tabs ----------
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
@@ -262,7 +266,7 @@ function printLoan(loan){
   </article>`;
   const w=window.open('','_blank'); w.document.write(`<!doctype html><html><head><title>Fiche location</title><style>body{font-family:Arial;color:#171a1d;margin:0}.sheet{padding:28px;min-height:95vh;page-break-after:always}.sheet:last-child{page-break-after:auto}table{border-collapse:collapse;width:100%;margin:10px 0}th,td{text-align:left;border-bottom:1px solid #ddd;padding:10px;border-collapse:collapse}th{width:180px;color:#555}.serial{margin-top:30px;color:#777;font-size:10px}.loan-meta th{display:none} @media print{.sheet{break-after:page}.sheet:last-child{break-after:auto}}</style></head><body>${html}<script>window.onload=()=>window.print()<\/script></body></html>`); w.document.close(); }
 function printKit(kit){
-  const itemsList = (kit.items||[]).map(id=>{ const x=items.find(i=>i.id===id); if(!x) return `<tr><th>?</th><td>?</td><td>Supprimé</td></tr>`; return `<tr><th>${esc(x.name)}</th><td>${x.quantity}</td><td>${x.location?esc(x.location):'—'}</td><td>${esc(x.holder||'')}</td></tr>`; }).join('');
+  const itemsList = kitEntries(kit).map(entry=>{ const x=items.find(i=>i.id===entry.itemId); if(!x) return `<tr><th>?</th><td>${entry.qty}</td><td>Supprimé</td><td>—</td></tr>`; return `<tr><th>${esc(x.name)}</th><td>${entry.qty}</td><td>${x.location?esc(x.location):'—'}</td><td>${esc(x.holder||'')}</td></tr>`; }).join('');
   const html=`<article class="sheet"><header><h1>LA CAVERNE D’ALIBAAB</h1><b>FICHE PAR SAC</b><h2 style="margin:0">${esc(kit.name)}</h2></header>
     <p class="category">${esc(kit.location||'—')}</p>
     ${kit.description?`<p class="notes">${esc(kit.description)}</p>`:''}
@@ -280,28 +284,28 @@ let departureLoan = null;
 function populateDeparture(loan){
   departureLoan=loan||null;
   const box=$('#departureItems'); box.innerHTML='';
-  const src=loan?.items?.length?loan.items:departureQueue;
+  const src=loan?.items?.length?loan.items.map(it=>({...it,qty:Math.max(0,(Number(it.qty)||1)-(Number(it.departedQty)||0))})).filter(it=>it.qty>0):departureQueue;
   $('#departureTitle').textContent=loan?`Départ · ${loan.client||''} ${loan.firstname||''}`:'Départ — validation du matériel scanné';
   src.forEach(it=>{
     const row=document.createElement('div'); row.className='depart-row'; row.dataset.itemId=it.itemId||'';
-    row.innerHTML=`<input type="checkbox" class="departCheck" checked><input type="text" class="departName" value="${esc(it.name||it.itemId)}" readonly><input type="number" class="departQty" min="1" value="${Math.max(1,Number(it.qty)||1)}"><select class="departStatus"><option value="departed" selected>À sortir</option><option value="returned">Déjà rendu</option></select>`;
+    row.innerHTML=`<input type="checkbox" class="departCheck" checked><input type="text" class="departName" value="${esc(it.name||it.itemId)}" readonly><input type="number" class="departQty" min="1" value="${Math.max(1,Number(it.qty)||1)}"><select class="departStatus"><option value="departed" selected>À sortir</option><option value="skip">Ne pas sortir</option></select>`;
     box.appendChild(row);
   });
   $('#departureCount').textContent=src.length;
 }
 $('#validateDeparture').onclick=()=>{
   const rows=[...$('#departureItems').querySelectorAll('.depart-row')];
-  const selected=rows.filter(r=>r.querySelector('.departCheck').checked).map(r=>({itemId:r.dataset.itemId,name:r.querySelector('.departName').value,qty:Math.max(1,Number(r.querySelector('.departQty').value)||1),status:r.querySelector('.departStatus').value}));
-  if(!selected.length)return alert('Sélectionne au moins un objet.');
+  const selected=rows.filter(r=>r.querySelector('.departCheck').checked).map(r=>{const itemId=r.dataset.itemId,obj=items.find(x=>x.id===itemId),requested=Math.max(1,Number(r.querySelector('.departQty').value)||1),status=r.querySelector('.departStatus').value;return {itemId,name:r.querySelector('.departName').value,qty:obj&&status==='departed'?Math.min(requested,getAvailableQty(obj)):requested,status};}).filter(s=>!items.some(x=>x.id===s.itemId)||s.status!=='departed'||s.qty>0);
+  if(!selected.length)return alert('Aucune unité disponible à sortir. Vérifie les quantités ou le stock.');
   const date=new Date().toISOString().slice(0,10), client=departureLoan?`${departureLoan.client||''} ${departureLoan.firstname||''}`.trim():'Départ manuel';
   selected.forEach(s=>{
     const obj=items.find(x=>x.id===s.itemId);
-    if(obj&&s.status==='departed'){ obj.status='loaned'; obj.holder=client; obj.loanDate=departureLoan?.startDate||date; obj.dueDate=departureLoan?.endDate||''; }
-    movements.push({id:uid(),date,type:'departure',itemId:s.itemId||null,itemName:s.name,qty:s.qty,holder:client,note:departureLoan?`Location ${departureLoan.id}`:'Départ scanné'});
+    if(obj&&s.status==='departed'){ensureItemQtyState(obj);const qty=Math.min(s.qty,Number(obj.stockQty)||0);obj.stockQty=Math.max(0,(Number(obj.stockQty)||0)-qty);obj.loanedQty=(Number(obj.loanedQty)||0)+qty;obj.holder=client;obj.loanDate=departureLoan?.startDate||date;obj.dueDate=departureLoan?.endDate||'';syncItemLegacyStatus(obj);} 
+    if(s.status==='departed')movements.push({id:uid(),date,type:'departure',itemId:s.itemId||null,itemName:s.name,qty:s.qty,holder:client,note:departureLoan?`Location ${departureLoan.id}`:'Départ scanné'});
   });
   if(departureLoan){
-    departureLoan.items=(departureLoan.items||[]).map(it=>{const found=selected.find(s=>s.itemId&&s.itemId===it.itemId); return found?{...it,status:'departed'}:it;});
-    departureLoan.status='departed';
+    departureLoan.items=(departureLoan.items||[]).map(it=>{const found=selected.find(s=>s.itemId&&s.itemId===it.itemId&&s.status==='departed'); return found?{...it,departedQty:Math.min(Number(it.qty)||1,(Number(it.departedQty)||0)+Number(found.qty||0)),status:'departed'}:it;});
+    if(departureLoan.items.some(it=>Number(it.departedQty||0)>Number(it.returnedQty||0)))departureLoan.status='departed';
   }
   saveAll();
   const html=generateDeparturePDF(client,'—',date,selected,'Vérifier le matériel au retour.',departureLoan);
@@ -317,10 +321,10 @@ $('#printDepartBtn').onclick=()=>{ if(departureQueue.length){populateDeparture()
 $('#closeDeparture').onclick=$('#cancelDeparture').onclick=()=>$('#departureDialog').close();
 
 // ---------- scanner ----------
-let scanner=null, scannerMode='scan', scannerActive=false;
+let scanner=null, scannerMode='scan', scannerActive=false, scanAudioContext=null, kitCheck=null;
 function initScanner(){
   document.querySelectorAll('.mode-btn[data-mode]').forEach(b=>b.onclick=()=>setScannerMode(b.dataset.mode));
-  $('#scanToggle').onclick=()=>scannerActive?stopScanner():startScanner();
+  $('#scanToggle').onclick=async()=>{ if(!scannerActive) await unlockScanFeedback(); scannerActive?stopScanner():startScanner(); };
 }
 function setScannerMode(mode){
   scannerMode=mode;
@@ -345,18 +349,37 @@ function findItemByScannedCode(value){
   const code=String(value||'').trim();
   return items.find(x=>x.id===parseItemFromScannedText(code)||x.qrCode===code||x.serial===code||x.barcode===code||x.externalQr===code);
 }
+async function unlockScanFeedback(){
+  try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;if(!scanAudioContext)scanAudioContext=new Ctx();if(scanAudioContext.state==='suspended')await scanAudioContext.resume();
+    // iOS n'autorise l'audio qu'après une action utilisateur : on déverrouille ici, au toucher du bouton caméra.
+    const osc=scanAudioContext.createOscillator(),gain=scanAudioContext.createGain();gain.gain.value=0.00001;osc.connect(gain);gain.connect(scanAudioContext.destination);osc.start();osc.stop(scanAudioContext.currentTime+0.015);
+  }catch(e){console.warn('Audio scanner indisponible',e);}
+}
+function scanFeedback(){
+  try{if(navigator.vibrate)navigator.vibrate([55,35,55]);}catch(e){}
+  try{const ctx=scanAudioContext;if(ctx&&ctx.state==='running'){const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='sine';osc.frequency.setValueAtTime(1050,ctx.currentTime);gain.gain.setValueAtTime(.0001,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(.10,ctx.currentTime+.008);gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+.12);osc.connect(gain);gain.connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+.13);}}catch(e){console.warn('Bip scanner impossible',e);}
+}
 function onScanSuccess(decodedText){
   const safe=String(decodedText||'').trim(), now=Date.now();
   if(!safe||(safe===lastScanValue&&now-lastScanAt<1800))return;
   lastScanValue=safe;lastScanAt=now;
   const label=$('#scanStatus');
+  // Pendant un contrôle détaillé, chaque QR matériel scanné coche une unité du kit.
+  if(kitCheck){
+    const checkedItem=findItemByScannedCode(safe);if(!checkedItem){label.textContent='QR non reconnu pour ce kit : '+safe.slice(0,50);return;}
+    const line=kitCheck.lines.find(z=>z.itemId===checkedItem.id);if(!line){label.textContent=`${checkedItem.name} ne fait pas partie du kit « ${kitCheck.kit.name} ».`;addScanLog('Hors kit : '+checkedItem.name,'unknown');return;}
+    if(line.scanned>=line.required){label.textContent=`Quantité déjà complète pour ${checkedItem.name} (${line.required}/${line.required}).`;return;}
+    line.scanned++;scanFeedback();renderKitCheck();label.textContent=`✓ ${checkedItem.name} · ${line.scanned}/${line.required}`;addScanLog(`${kitCheck.mode==='return'?'Retour':'Contrôle'} kit : ${checkedItem.name} ${line.scanned}/${line.required}`,'ok');return;
+  }
+  const kitId=parseKitFromScannedText(safe), scannedKit=kits.find(k=>k.id===kitId);
+  if(scannedKit){scanFeedback();openKitCheck(scannedKit,scannerMode==='return'?'return':scannerMode==='depart'?'depart':'inspect');label.textContent=`Kit « ${scannedKit.name} » : contrôle détaillé ouvert.`;addScanLog('Kit : '+scannedKit.name,'ok');return;}
   if(scannerMode==='scan'){
     const travelId=parseTravelFromScannedText(safe), scenario=travel.find(t=>t.id===travelId);
-    if(scenario){const missing=[];let added=0;(scenario.needs||[]).forEach(n=>{const found=items.find(i=>[i.name,i.brand+' '+i.model].some(v=>v&&v.toLowerCase().includes(String(n.label||'').toLowerCase()))||String(n.label||'').toLowerCase().includes(i.name.toLowerCase()));if(found&&!departureQueue.some(q=>q.itemId===found.id)){departureQueue.push({itemId:found.id,name:found.name,qty:n.qty||1,status:'assigned'});added++;}else if(!found)missing.push(n.label);});label.textContent=`Scénario « ${scenario.name} » : ${added} équipement(s) ajouté(s) à la préparation.`;$('#scanResults').innerHTML=`<p><strong>${scenario.name}</strong> · ${added} ajouté(s)${missing.length?' · '+missing.length+' besoin(s) à associer':''}</p><button class="btn primary" id="openDepartureQueue">Vérifier la préparation</button>`;$('#openDepartureQueue').onclick=()=>{populateDeparture();$('#departureDialog').showModal();};addScanLog('Scénario : '+scenario.name,'ok');return;}
+    if(scenario){const missing=[];let added=0;(scenario.needs||[]).forEach(n=>{const found=items.find(i=>n.itemId&&i.id===n.itemId)||items.find(i=>i.name.trim().toLowerCase()===String(n.label||'').trim().toLowerCase());if(found){const queued=departureQueue.find(q=>q.itemId===found.id);if(queued)queued.qty+=Math.max(1,Number(n.qty)||1);else departureQueue.push({itemId:found.id,name:found.name,qty:Math.max(1,Number(n.qty)||1),status:'assigned'});added++;}else missing.push(n.label);});label.textContent=`Scénario « ${scenario.name} » : ${added} équipement(s) ajouté(s) à la préparation.`;$('#scanResults').innerHTML=`<p><strong>${scenario.name}</strong> · ${added} ajouté(s)${missing.length?' · '+missing.length+' besoin(s) à associer':''}</p><button class="btn primary" id="openDepartureQueue">Vérifier la préparation</button>`;$('#openDepartureQueue').onclick=()=>{populateDeparture();$('#departureDialog').showModal();};addScanLog('Scénario : '+scenario.name,'ok');return;}
   }
   const x=findItemByScannedCode(safe);
   if(scannerMode==='scan'){
-    if(x){openEdit(x.id);label.textContent=`Fiche ouverte : ${x.name}`;addScanLog('✓ '+x.name,'ok');}
+    if(x){scanFeedback();openEdit(x.id);label.textContent=`Fiche ouverte : ${x.name}`;addScanLog('✓ '+x.name,'ok');}
     else {
       const choice=prompt('QR code reconnu mais non associé.\nColle ce code dans la fiche d’un matériel existant ou saisis le nom du matériel à créer.\n\nCode : '+safe+'\n\nNom du matériel (laisser vide pour ignorer) :');
       if(choice){const name=choice.trim();if(name){const existing=items.find(i=>i.name.toLowerCase()===name.toLowerCase());if(existing){existing.externalQr=safe;saveAll();label.textContent=`QR associé à ${existing.name}`;addScanLog('QR associé : '+existing.name,'ok');}else{if(confirm(`Créer une fiche « ${name} » avec ce QR ?`)){editingId=null;resetForm();$('#itemForm').elements.name.value=name;$('#itemForm').elements.externalQr.value=safe;$('#itemDialog').showModal();}}}}
@@ -364,18 +387,56 @@ function onScanSuccess(decodedText){
     }
   }else if(scannerMode==='depart'){
     if(!x){label.textContent='QR non associé à un équipement. Passe en mode SCAN pour l’associer.';addScanLog('? '+safe.slice(0,60),'unknown');return;}
-    if(departureQueue.some(q=>q.itemId===x.id)){label.textContent=`Déjà dans la liste : ${x.name}`;return;}
-    departureQueue.push({itemId:x.id,name:x.name,qty:1,status:'assigned'});label.textContent=`✓ ${x.name} ajouté à la liste de départ (${departureQueue.length}).`;addScanLog('+ '+x.name,'ok');
+    const queued=departureQueue.find(q=>q.itemId===x.id);const already=Number(queued?.qty)||0;const max=Math.max(0,Number(x.stockQty??(x.status==='stock'?x.quantity:0))||0);if(max<=0){label.textContent=`Aucune unité disponible en stock pour ${x.name}.`;return;}if(already>=max){label.textContent=`Quantité maximale atteinte pour ${x.name} (${max}).`;return;}if(queued)queued.qty=already+1;else departureQueue.push({itemId:x.id,name:x.name,qty:1,status:'assigned'});scanFeedback();label.textContent=`✓ ${x.name} · ${queued?'quantité scannée mise à jour':'ajouté à la liste'} (${(queued?.qty)||1} / ${max}).`;addScanLog('+ '+x.name+' · '+(queued?.qty||1)+' scanné(s)','ok');
     $('#scanResults').innerHTML=`<p><strong>${departureQueue.length}</strong> matériel(s) dans la liste de départ.</p><button class="btn primary" id="openDepartureQueue">Vérifier et valider le départ</button>`;
     $('#openDepartureQueue').onclick=()=>{populateDeparture();$('#departureDialog').showModal();};
   }else if(scannerMode==='return'){
     if(!x){label.textContent='QR non associé à un équipement.';return;}
-    const previousHolder=x.holder||'';x.status='stock';x.holder='';x.dueDate='';x.loanDate='';
-    loans.forEach(l=>{(l.items||[]).forEach(it=>{if(it.itemId===x.id)it.status='returned';});if((l.items||[]).length&&l.items.every(it=>it.status==='returned'))l.status='returned';});
-    movements.push({id:uid(),date:new Date().toISOString().slice(0,10),type:'return',itemId:x.id,itemName:x.name,qty:1,holder:previousHolder,note:'Retour validé par scanner'});
+    scanFeedback();
+    const previousHolder=x.holder||'';ensureItemQtyState(x);const qty=Math.min(1,Number(x.loanedQty)||0);if(qty<=0){label.textContent=`Aucune unité de ${x.name} n’est actuellement déclarée sortie.`;return;}x.loanedQty=Math.max(0,(Number(x.loanedQty)||0)-qty);x.stockQty=(Number(x.stockQty)||0)+qty;syncItemLegacyStatus(x);
+    registerLoanReturn(x.id,qty);
+    movements.push({id:uid(),date:new Date().toISOString().slice(0,10),type:'return',itemId:x.id,itemName:x.name,qty,holder:previousHolder,note:'Retour validé par scanner'});
     saveAll();label.textContent=`↩ ${x.name} rendu en stock.`;addScanLog('↩ '+x.name,'ok');
   }
 }
+function openKitCheck(kit,mode='depart'){
+  kitCheck={kit,mode,lines:kitEntries(kit).map(entry=>{const item=items.find(i=>i.id===entry.itemId);return {itemId:entry.itemId,name:item?.name||'Matériel supprimé',required:entry.qty,scanned:0,missing:!item};}).filter(x=>!x.missing)};
+  renderKitCheck();$('#kitCheckTitle').textContent=(mode==='return'?'Retour du kit · ':mode==='depart'?'Départ du kit · ':'Contenu du kit · ')+kit.name;
+  $('#kitCheckHint').textContent=mode==='return'?'Scanne chaque élément rendu, ou ajuste les quantités manuellement.':mode==='depart'?'Scanne chaque élément à sortir, ou ajuste les quantités manuellement.':'Scanne les QR des éléments pour vérifier leur présence, ou ajuste les quantités manuellement.';
+  $('#kitCheckDialog').showModal();
+}
+function renderKitCheck(){
+  if(!kitCheck)return;const box=$('#kitCheckRows');
+  box.innerHTML=kitCheck.lines.map((line,index)=>`<div class="kit-check-row" data-line="${index}"><div><strong>${esc(line.name)}</strong><small>${line.scanned} scanné(s) sur ${line.required}</small></div><div class="kit-check-controls"><button type="button" class="btn subtle" data-kit-minus="${index}" aria-label="Retirer une unité">−</button><b>${line.scanned}/${line.required}</b><button type="button" class="btn subtle" data-kit-plus="${index}" aria-label="Ajouter une unité">＋</button></div></div>`).join('')||'<p class="muted">Aucun matériel valide dans ce kit.</p>';
+  const total=kitCheck.lines.reduce((n,l)=>n+l.required,0),done=kitCheck.lines.reduce((n,l)=>n+l.scanned,0);
+  $('#kitCheckProgress').textContent=`${done} / ${total} unités contrôlées`;
+  $('#kitCheckComplete').disabled=done===0;
+}
+$('#kitCheckRows').addEventListener('click',e=>{const plus=e.target.closest('[data-kit-plus]'),minus=e.target.closest('[data-kit-minus]');if(!kitCheck||(!plus&&!minus))return;const index=Number((plus||minus).dataset[plus?'kitPlus':'kitMinus']),line=kitCheck.lines[index];if(!line)return;line.scanned=Math.max(0,Math.min(line.required,line.scanned+(plus?1:-1)));renderKitCheck();});
+$('#kitCheckComplete').onclick=()=>{
+  if(!kitCheck)return;const {kit,mode,lines}=kitCheck;const selected=lines.filter(l=>l.scanned>0);if(!selected.length)return;
+  if(mode==='inspect'){kitCheck=null;$('#kitCheckDialog').close();$('#scanStatus').textContent=`Contrôle du contenu de « ${kit.name} » terminé.`;addScanLog('Contenu vérifié : '+kit.name,'ok');return;}
+  if(mode==='depart'){
+    selected.forEach(l=>{const q=departureQueue.find(x=>x.itemId===l.itemId);if(q)q.qty=Math.max(0,Number(q.qty)||0)+l.scanned;else departureQueue.push({itemId:l.itemId,name:l.name,qty:l.scanned,status:'assigned'});});
+    kitCheck=null;$('#kitCheckDialog').close();populateDeparture();$('#departureDialog').showModal();
+  }else{
+    const date=new Date().toISOString().slice(0,10);
+    selected.forEach(l=>{const obj=items.find(x=>x.id===l.itemId);if(!obj)return;const previousHolder=obj.holder||'';ensureItemQtyState(obj);const available=Math.max(0,Number(obj.loanedQty)||0);if(available<=0){addScanLog('Aucune quantité sortie : '+obj.name,'unknown');return;}const qty=Math.min(l.scanned,available);if(obj.stockQty!=null||obj.loanedQty!=null){obj.loanedQty=Math.max(0,available-qty);obj.stockQty=Math.max(0,Number(obj.stockQty)||0)+qty;syncItemLegacyStatus(obj);}else{obj.status='stock';obj.holder='';obj.dueDate='';obj.loanDate='';}
+      registerLoanReturn(obj.id,qty);
+      movements.push({id:uid(),date,type:'return',itemId:obj.id,itemName:obj.name,qty,holder:previousHolder,note:`Retour du kit ${kit.name}`});
+    });
+    kitCheck=null;$('#kitCheckDialog').close();saveAll();$('#scanStatus').textContent=`Retour du kit « ${kit.name} » enregistré.`;addScanLog('Retour kit : '+kit.name,'ok');
+  }
+};
+$('#closeKitCheck').onclick=$('#cancelKitCheck').onclick=()=>{kitCheck=null;$('#kitCheckDialog').close();};
+function registerLoanReturn(itemId,qty){
+  let remaining=Math.max(0,Number(qty)||0);
+  const candidates=loans.filter(loan=>(loan.items||[]).some(it=>it.itemId===itemId&&Math.max(0,Number(it.departedQty??it.qty)||0)>Math.max(0,Number(it.returnedQty)||0))).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  for(const loan of candidates){for(const it of (loan.items||[]).filter(x=>x.itemId===itemId)){if(remaining<=0)break;const out=Math.max(0,Number(it.departedQty??it.qty)||0),already=Math.max(0,Number(it.returnedQty)||0),take=Math.min(remaining,Math.max(0,out-already));if(!take)continue;it.returnedQty=already+take;remaining-=take;if(it.returnedQty>=out)it.status='returned';}}
+  loans.forEach(loan=>{const tracked=(loan.items||[]).filter(it=>Number(it.departedQty||0)>0);if(tracked.length&&tracked.every(it=>Number(it.returnedQty||0)>=Number(it.departedQty||0))&&(loan.items||[]).every(it=>Number(it.departedQty||0)>=Number(it.qty||1)))loan.status='returned';});
+}
+function syncItemLegacyStatus(item){const stock=Math.max(0,Number(item.stockQty)||0),loaned=Math.max(0,Number(item.loanedQty)||0),unavailable=Math.max(0,Number(item.unavailableQty)||0);item.quantity=stock+loaned+unavailable;item.status=loaned>0?'loaned':stock>0?'stock':'unavailable';if(!loaned){item.holder='';item.loanDate='';item.dueDate='';}}
+function parseKitFromScannedText(text){const m=String(text||'').match(/(?:caverne-alibaab:kit=|kit=)([^\s&]+)/i);return m?decodeURIComponent(m[1]):null;}
 function addScanLog(label,kind){const ul=$('#scanLog');const li=document.createElement('li');li.className=kind||'';li.textContent=label;ul.prepend(li);while(ul.children.length>20)ul.lastElementChild.remove();}
 function parseTravelFromScannedText(text){const m=String(text||'').match(/(?:caverne-alibaab:travel=|travel=)([^\s&]+)/i);return m?decodeURIComponent(m[1]):null;}
 function parseItemFromScannedText(text){

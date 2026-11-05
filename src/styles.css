@@ -56,3 +56,25 @@ input,select,textarea{font-size:16px} /* évite le zoom automatique d'iOS */
 .scan-container video{width:100%;max-height:480px;object-fit:cover}.scan-results{margin-top:12px}.scan-log{margin-top:16px}.scan-log-list{padding-left:18px}
 .travel-row{display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap}.travel-row input{min-width:0;padding:10px}.travel-row .travel-label{flex:1;min-width:150px}.travel-row .travel-notes{flex:1;min-width:130px}
 .signatures{display:flex;gap:44px;margin:55px 0 24px}.signatures>div{flex:1;min-height:70px;border-top:1px solid #777;padding-top:8px;color:#555;font-size:12px}
+
+/* Quantités par équipement dans les sacs et kits */
+.kit-rows{display:grid;gap:8px;margin:10px 0}.kit-row{display:grid;grid-template-columns:minmax(0,1fr) 92px 42px;gap:8px;align-items:center}.kit-row input,.kit-row select{width:100%;min-width:0}.kit-row button{padding:9px 10px}.qr-content img{width:min(340px,80vw);height:auto;max-height:70vh;image-rendering:pixelated}
+@media(max-width:560px){.kit-row{grid-template-columns:minmax(0,1fr) 70px 38px}.kit-row select,.kit-row input{padding:10px 8px}}
+
+/* Contrôle détaillé des kits : chaque unité est pointée individuellement */
+.kit-check-progress{padding:10px 12px;border:1px solid #6a552d;background:#3a2f17;border-radius:9px;color:#f4cf81;font-weight:800}
+.kit-check-rows{display:grid;gap:7px;margin:14px 0;max-height:48vh;overflow:auto}
+.kit-check-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#171c1f}
+.kit-check-row strong,.kit-check-row small{display:block}.kit-check-row small{font-size:11px;color:var(--muted);margin-top:4px}
+.kit-check-controls{display:flex;align-items:center;gap:10px;white-space:nowrap}.kit-check-controls b{min-width:44px;text-align:center;color:var(--yellow)}
+.kit-check-controls button{min-width:40px;min-height:40px;font-size:20px;padding:5px}
+#kitCheckComplete:disabled{opacity:.45;cursor:not-allowed}
+
+/* Le contrôle du kit reste compact afin de laisser la caméra visible derrière */
+#kitCheckDialog::backdrop{background:transparent;backdrop-filter:none}
+@media(max-width:560px){
+  #kitCheckDialog{position:fixed;inset:auto 0 0;margin:0;width:100%;height:auto;max-height:58vh;border-radius:16px 16px 0 0;border-bottom:0}
+  #kitCheckDialog .dialog-form{height:auto;max-height:58vh;overflow:auto;padding:16px 16px calc(18px + env(safe-area-inset-bottom))}
+  #kitCheckDialog .kit-check-rows{max-height:24vh}
+  #kitCheckDialog .dialog-actions{position:sticky;bottom:0}
+}
