@@ -72,3 +72,16 @@ Lors de la création d’un sac ou d’un kit, ajoute chaque référence de mat�
 ## Scanner et QR codes
 
 Au démarrage de la caméra, l’application déverrouille l’audio à partir du toucher sur le bouton. Chaque scan reconnu déclenche ensuite un bip. Une vibration est demandée si le navigateur expose l’API correspondante ; certains navigateurs iOS ne permettent pas la vibration depuis une page web. En mode DÉPART, la quantité scannée est limitée au stock disponible. Les QR fabricant existants restent reconnus lorsqu’ils sont associés à une fiche.
+
+
+## Portail de demandes de prêt en ligne (v1.4.0)
+
+1. Dans Supabase, ouvre **SQL Editor** et exécute `docs/PORTAIL-DEMANDES.sql` après le SQL de synchronisation déjà installé. Cette opération ajoute le catalogue public et les demandes sans modifier `caverne_state`.
+2. Publie la PWA sur GitHub Pages comme d’habitude. Le fichier `demande.html` est publié automatiquement avec le dossier `src/`.
+3. Dans La Caverne d’Alibaab, connecte-toi au compte propriétaire puis ouvre **Demandes en ligne**. Clique sur **Publier le catalogue**. Recommence après chaque modification du stock, des quantités ou des kits si tu veux actualiser ce que les demandeurs voient.
+4. Renseigne l’adresse de base GitHub Pages (l’adresse du site, avec le chemin du dépôt si nécessaire), puis clique sur **Créer le lien du portail**. Partage ce lien aux clients et collègues.
+5. Les demandes apparaissent dans **Demandes en ligne**. Accepter crée un prêt dans « Locations & tournages » ; le matériel n’est pas marqué comme sorti avant le départ réel. Refuser et proposer une modification envoient le statut et le message dans le suivi du demandeur.
+
+Les demandeurs peuvent déposer une demande sans compte : le lien privé affiché après l’envoi est leur justificatif de suivi, à conserver. Avec un compte, ils retrouvent leurs demandes dans « Mes demandes ». Le portail n’envoie pas d’e-mail automatiquement dans cette version : il faut conserver le lien de suivi ou utiliser l’accès par compte.
+
+**Sécurité :** seule la clé publique Supabase (`sb_publishable_…` ou clé anon) est incluse dans le lien. Ne jamais utiliser `service_role`. Les demandes ne sont pas accessibles publiquement : le suivi invité exige un jeton secret, et l’espace de gestion exige le compte propriétaire.

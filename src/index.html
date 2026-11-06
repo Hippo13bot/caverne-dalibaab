@@ -30,6 +30,7 @@
     <button class="tab active" data-view="inventory">Mon inventaire</button>
     <button class="tab" data-view="kits">Sacs & kits</button>
     <button class="tab" data-view="tournois">Locations & tournages</button>
+    <button class="tab" data-view="requests">Demandes en ligne</button>
     <button class="tab" data-view="scanner">Scanners</button>
     <button class="tab" data-view="exports">Exports & impressions</button>
   </nav>
@@ -71,6 +72,13 @@
         <div id="movementList"></div>
       </article>
     </div>
+  </section>
+
+  <!-- ONLINE LOAN REQUESTS -->
+  <section id="requestsView" hidden>
+    <div class="section-head-row"><div><h2>Demandes de prêt en ligne</h2><p class="muted">Les demandes restent en attente tant que tu ne les as pas acceptées.</p></div><button class="btn primary" id="refreshRequests">Actualiser</button></div>
+    <article class="panel sync-panel"><h3>Portail clients & collègues</h3><p>Publie ton catalogue puis partage le lien du site. Les demandeurs peuvent utiliser un compte ou faire une demande sans compte avec un lien privé de suivi.</p><label>Adresse de base du site publié (GitHub Pages)<input id="portalBaseUrl" type="url" placeholder="https://...github.io/.../"></label><div class="sync-actions"><button class="btn" id="publishCatalog">Publier le catalogue</button><button class="btn primary" id="makePortalLink">Créer le lien du portail</button></div><input id="portalLink" readonly placeholder="Le lien du portail apparaîtra ici"><p id="portalStatus" class="note small">Connecte-toi au compte propriétaire dans la rubrique Exports & impressions.</p></article>
+    <div id="requestAdminList"><p class="muted">Aucune demande chargée.</p></div>
   </section>
 
   <!-- SCANNERS -->

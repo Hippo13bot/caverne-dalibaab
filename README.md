@@ -14,7 +14,11 @@ Inventaire de matériel audiovisuel, photo, son, informatique et accessoires. Un
 - OCR de plaque signalétique pour proposer marque, modèle et numéro de série (connexion internet requise ; vérification humaine nécessaire).
 - Export CSV, sauvegarde/restauration JSON, fiches PDF individuelles et inventaire.
 - Stockage local IndexedDB pour rester utilisable hors ligne.
-- Synchronisation périodique Mac ↔ iPhone via Supabase, avec compte utilisateur et règles RLS. La configuration initiale est décrite dans `docs/GUIDE-UTILISATEUR.md` et `docs/SUPABASE.sql`.
+- Synchronisation périodique Mac ↔ iPhone via Supabase, avec compte utilisateur et règles RLS.
+- Portail web public de demandes de prêt pour clients et collègues : dépôt sans compte avec lien privé de suivi, ou création de compte et historique personnel.
+- Validation manuelle dans l’application : accepter (création d’un prêt), refuser ou proposer des modifications. Le portail ne peut jamais confirmer seul une réservation ni modifier l’inventaire.
+- Catalogue public limité aux noms, catégories, modèles, quantités disponibles et compositions des kits ; aucune donnée privée de l’inventaire n’est exposée.
+- Configuration du portail : exécuter `docs/PORTAIL-DEMANDES.sql` après `docs/SUPABASE.sql`, publier le catalogue depuis l’onglet « Demandes en ligne », puis renseigner l’URL GitHub Pages et partager le lien généré.
 
 ## Identité
 - Mascotte GIF animée dans l'application.
@@ -31,7 +35,7 @@ Inventaire de matériel audiovisuel, photo, son, informatique et accessoires. Un
 1. Pousse le dépôt sur GitHub.
 2. Dans **Actions**, lance « Compiler l'app Mac et Windows » ou crée un tag de version :
    ```bash
-   git tag v1.3.0
+   git tag v1.4.0
    git push origin v1.3.0
    ```
 3. Télécharge les installateurs dans les artefacts du workflow ou dans la Release.
