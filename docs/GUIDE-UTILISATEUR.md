@@ -71,7 +71,7 @@ Lors de la création d’un sac ou d’un kit, ajoute chaque référence de mat�
 
 ## Scanner et QR codes
 
-Au démarrage de la caméra, l’application déverrouille l’audio à partir du toucher sur le bouton. Chaque scan reconnu déclenche ensuite un bip. Une vibration est demandée si le navigateur expose l’API correspondante ; certains navigateurs iOS ne permettent pas la vibration depuis une page web. En mode DÉPART, la quantité scannée est limitée au stock disponible. Les QR fabricant existants restent reconnus lorsqu’ils sont associés à une fiche.
+Au démarrage de la caméra, l’application déverrouille l’audio à partir du toucher sur le bouton. Chaque scan reconnu déclenche ensuite un bip. Les QR des étiquettes publiques (liens `contact.html`) sont également reconnus directement par le scanner intégré : l’application extrait automatiquement le jeton de l’exemplaire et ouvre la fiche matériel correspondante en mode SCAN, ou traite le matériel en mode DÉPART / RETOUR. Une vibration est demandée si le navigateur expose l’API correspondante ; certains navigateurs iOS ne permettent pas la vibration depuis une page web. En mode DÉPART, la quantité scannée est limitée au stock disponible. Les QR fabricant existants restent reconnus lorsqu’ils sont associés à une fiche.
 
 
 ## Portail de demandes de prêt en ligne (v1.4.0)

@@ -69,10 +69,13 @@ Puis ouvre `http://localhost:8000`. La caméra et le service worker nécessitent
 - L'OCR lit les inscriptions d'une plaque, mais ne garantit pas l'identification visuelle automatique d'un appareil.
 
 
+### Version 1.5.2 — correction du scanner des étiquettes publiques
+- Le scanner intégré reconnaît maintenant les QR publics `contact.html` et retrouve automatiquement l’exemplaire correspondant. Le même QR sert à la gestion interne et à la fiche publique de contact.
+
 ### Nouveauté 1.5.0 — étiquettes QR propriétaires
 
 - Propriétaires multiples et coordonnées publiques au choix.
-- Hashtag et QR uniques pour chaque exemplaire physique.
+- Hashtag et QR uniques pour chaque exemplaire physique. Le même QR public est reconnu par le scanner intégré pour la gestion des entrées, sorties et retours ; scanné avec l’appareil photo d’un téléphone, il ouvre la fiche publique de contact.
 - Sélection des unités et planches A4 en trois formats (25 × 25, 35 × 25 et 45 × 30 mm).
 - Page publique de contact accessible au scan.
 - Configuration SQL complémentaire : `docs/ETIQUETTES-QR.sql`.

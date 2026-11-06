@@ -405,7 +405,20 @@ async function stopScanner(){
 }
 function findItemByScannedCode(value){
   const code=String(value||'').trim();
-  return items.find(x=>x.id===parseItemFromScannedText(code)||x.qrCode===code||x.serial===code||x.barcode===code||x.externalQr===code);
+  // Les étiquettes publiques contiennent une URL contact.html?id=TOKEN&project=…&key=… .
+  // Dans l'application, on extrait le jeton de l'exemplaire pour retrouver sa fiche locale.
+  let publicLabelId='';
+  try{
+    const url=new URL(code);
+    if(/(?:^|\/)contact\.html$/i.test(url.pathname)&&url.searchParams.has('project')&&url.searchParams.has('key')){
+      publicLabelId=url.searchParams.get('id')||'';
+    }
+  }catch(e){}
+  return items.find(x=>
+    x.id===parseItemFromScannedText(code)||
+    (publicLabelId&&Array.isArray(x.units)&&x.units.some(unit=>unit.token===publicLabelId||unit.id===publicLabelId))||
+    x.qrCode===code||x.serial===code||x.barcode===code||x.externalQr===code
+  );
 }
 async function unlockScanFeedback(){
   try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;if(!scanAudioContext)scanAudioContext=new Ctx();if(scanAudioContext.state==='suspended')await scanAudioContext.resume();
