@@ -85,3 +85,14 @@ Au démarrage de la caméra, l’application déverrouille l’audio à partir d
 Les demandeurs peuvent déposer une demande sans compte : le lien privé affiché après l’envoi est leur justificatif de suivi, à conserver. Avec un compte, ils retrouvent leurs demandes dans « Mes demandes ». Le portail n’envoie pas d’e-mail automatiquement dans cette version : il faut conserver le lien de suivi ou utiliser l’accès par compte.
 
 **Sécurité :** seule la clé publique Supabase (`sb_publishable_…` ou clé anon) est incluse dans le lien. Ne jamais utiliser `service_role`. Les demandes ne sont pas accessibles publiquement : le suivi invité exige un jeton secret, et l’espace de gestion exige le compte propriétaire.
+
+## Étiquettes QR avec contact propriétaire
+
+1. Dans **Exports & impressions**, ouvre **Gérer les propriétaires** et ajoute les personnes ou structures propriétaires du matériel. Les cases téléphone/e-mail déterminent les coordonnées visibles publiquement.
+2. Dans **Mon inventaire**, modifie chaque fiche et choisis son propriétaire. Si un article a plusieurs exemplaires, l'application crée un hashtag et un QR différents pour chaque exemplaire.
+3. Dans **Exports & impressions**, renseigne l'adresse HTTPS de ton site GitHub Pages dans **Préparer les étiquettes**. Connecte-toi au compte Supabase partagé sur cet appareil.
+4. Dans Supabase > SQL Editor, exécute une fois le fichier `docs/ETIQUETTES-QR.sql`. Cette table ne publie que les fiches QR sélectionnées depuis l'application ; les coordonnées cochées sont accessibles à toute personne qui scanne le QR.
+5. Sélectionne les exemplaires et le format, puis clique sur **Publier & imprimer la planche A4**. Dans la fenêtre d'impression, choisis le papier A4 autocollant adapté à ton imprimante et l'échelle **100 % / taille réelle** (désactive « Ajuster à la page »).
+6. Pour une meilleure tenue, recouvre la feuille imprimée avec un film adhésif transparent de plastification à froid avant de découper les étiquettes. Teste le scan après pelliculage.
+
+Formats proposés : mini 25 × 25 mm, compact 35 × 25 mm et confort 45 × 30 mm. Pour une lecture fiable, le format mini reste un petit QR : teste-le avec les téléphones utilisés avant d'imprimer toute une série. Les QR publics nécessitent une connexion Internet au moment du scan. Le QR contient l'URL publique, l'URL du projet Supabase et la clé publishable (publique) ; ne place jamais de clé `service_role` dans un QR.

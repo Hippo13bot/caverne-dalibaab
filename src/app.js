@@ -6,7 +6,7 @@ const STORES = {
   loans: 'caverne_alibaab_loans_v1',
   movements: 'caverne_alibaab_movements_v1'
 };
-let items = [], kits = [], travel = [], loans = [], movements = [];
+let items = [], kits = [], travel = [], loans = [], movements = [], owners = [];
 let editingId = null, editingTravelId = null, editingLoanId = null, editingKitId = null, photoData = '';
 let stateUpdatedAt = new Date().toISOString();
 let departureQueue = [];
@@ -32,7 +32,7 @@ function openFromHash(){
 }
 function saveAll(){ persistAll(); render(); }
 function persistAll(){
-  stateUpdatedAt=new Date().toISOString(); const state={items,kits,travel,loans,movements,updatedAt:stateUpdatedAt};
+  stateUpdatedAt=new Date().toISOString(); const state={items,kits,travel,loans,movements,owners,updatedAt:stateUpdatedAt};
   idb.set('state',state).catch(()=>alert("Enregistrement impossible : espace de stockage plein ? Fais une sauvegarde."));
   try { localStorage.setItem('caverne_alibaab_last_update',state.updatedAt); } catch(e) {}
 }
@@ -53,14 +53,14 @@ const idb = {
     if (!st) {
       const oldItems = await idb.get('state.items') || JSON.parse(localStorage.getItem(STORES.items) || '[]');
       const oldKits  = await idb.get('state.kits') || JSON.parse(localStorage.getItem(STORES.kits) || '[]');
-      st = { items: oldItems, kits: oldKits, travel: await idb.get('state.travel')||[], loans: await idb.get('state.loans')||[], movements: await idb.get('state.movements')||[] };
+      st = { items: oldItems, kits: oldKits, travel: await idb.get('state.travel')||[], loans: await idb.get('state.loans')||[], movements: await idb.get('state.movements')||[], owners: await idb.get('state.owners')||[] };
       if (oldItems.length || oldKits.length) await idb.set('state', st);
     }
-    items = st.items || [];
+    items = st.items || []; items.forEach(ensureItemUnits);
     kits  = st.kits || [];
     travel = st.travel || [];
     loans = st.loans || [];
-    movements = st.movements || []; stateUpdatedAt=st.updatedAt||stateUpdatedAt;
+    movements = st.movements || []; owners = st.owners || []; stateUpdatedAt=st.updatedAt||stateUpdatedAt;
   } catch (e) { alert("Le stockage de l'appareil est indisponible (Navigation privée ?). Les données ne seront pas conservées."); }
   window.__bootTrace = [];
   window.__bootTrace.push('start');
@@ -99,7 +99,7 @@ function renderInventory(){
   $('#categoryFilter').value=cats.includes(cf)?cf:'all';
   const filtered=items.filter(x=>matchesStatus(x,sf)&&(cf==='all'||x.category===cf)&&[x.name,x.brand,x.model,x.serial,x.category,x.location,x.holder].join(' ').toLowerCase().includes(q));
   $('#count').textContent=`${filtered.length} référence(s) · ${filtered.reduce((n,x)=>n+Math.max(1,Number(x.quantity)||1),0)} unité(s)`;
-  $('#inventory').innerHTML=filtered.length?filtered.map(x=>`<article class="item-card">${x.photo?`<img src="${x.photo}" alt="">`:''}<div class="item-meta"><span class="pill">${esc(x.category)}</span><span class="pill ${esc(displayStatus(x)==='partial'?'loaned':displayStatus(x))}">${statusNames[displayStatus(x)]}</span></div><h3>${esc(x.name)}</h3><p>${esc([x.brand,x.model].filter(Boolean).join(' · ')||'Modèle non renseigné')}<br>Quantité totale : ${Math.max(1,Number(x.quantity)||1)}${x.stockQty!=null||x.loanedQty!=null?`<br>En stock : ${Number(x.stockQty)||0} · Sorti : ${Number(x.loanedQty)||0}`:''}<br>${x.serial?'N° série : '+esc(x.serial):'Sans numéro de série'}<br>${x.location?'Emplacement : '+esc(x.location):'Emplacement non renseigné'}${x.holder?'<br>Avec : '+esc(x.holder):''}${x.dueDate?'<br>Retour prévu : '+esc(x.dueDate):''}${x.status==='unavailable'&&x.reason?'<br>'+reasonNames[x.reason]:''}</p><div class="card-actions"><button class="btn subtle" data-edit="${x.id}">Modifier</button><button class="btn subtle" data-qr="${x.id}">QR code</button><button class="btn subtle" data-print="${x.id}">Fiche PDF</button><button class="btn subtle" data-printloan="${x.id}">Fiche location</button><button class="btn subtle" data-delete="${x.id}">Supprimer</button></div></article>`).join(''):'<div class="empty">Aucun équipement correspondant. Ajoute ton matériel.</div>';
+  $('#inventory').innerHTML=filtered.length?filtered.map(x=>`<article class="item-card">${x.photo?`<img src="${x.photo}" alt="">`:''}<div class="item-meta"><span class="pill">${esc(x.category)}</span><span class="pill ${esc(displayStatus(x)==='partial'?'loaned':displayStatus(x))}">${statusNames[displayStatus(x)]}</span></div><h3>${esc(x.name)}</h3><p>${esc([x.brand,x.model].filter(Boolean).join(' · ')||'Modèle non renseigné')}<br>Quantité totale : ${Math.max(1,Number(x.quantity)||1)}${x.stockQty!=null||x.loanedQty!=null?`<br>En stock : ${Number(x.stockQty)||0} · Sorti : ${Number(x.loanedQty)||0}`:''}<br>${x.serial?'N° série : '+esc(x.serial):'Sans numéro de série'}<br>${x.location?'Emplacement : '+esc(x.location):'Emplacement non renseigné'}${x.holder?'<br>Avec : '+esc(x.holder):''}${x.dueDate?'<br>Retour prévu : '+esc(x.dueDate):''}${x.status==='unavailable'&&x.reason?'<br>'+reasonNames[x.reason]:''}</p><div class="card-actions"><button class="btn subtle" data-edit="${x.id}">Modifier</button><button class="btn subtle" data-qr="${x.id}">QR code</button><button class="btn subtle" data-label-item="${x.id}">Étiquettes</button><button class="btn subtle" data-print="${x.id}">Fiche PDF</button><button class="btn subtle" data-printloan="${x.id}">Fiche location</button><button class="btn subtle" data-delete="${x.id}">Supprimer</button></div></article>`).join(''):'<div class="empty">Aucun équipement correspondant. Ajoute ton matériel.</div>';
 }
 function kitEntries(kit){const grouped=new Map();(kit.items||[]).forEach(entry=>{const itemId=typeof entry==='string'?entry:(entry.itemId||entry.id);if(!itemId)return;const qty=typeof entry==='string'?1:Math.max(1,Number(entry.qty)||1);grouped.set(itemId,(grouped.get(itemId)||0)+qty);});return [...grouped].map(([itemId,qty])=>({itemId,qty}));}
 
@@ -157,7 +157,7 @@ function initLoanForm(){
   $('#loanForm').onsubmit=e=>{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); d.items=[]; const rows=$('#loanRows').querySelectorAll('.loan-row'); rows.forEach(r=>{ const itemId=r.dataset.itemId||''; const obj=items.find(x=>x.id===itemId); const name=r.querySelector('.loan-name').value.trim(); if(name){ { const prior=(loans.find(x=>x.id===editingLoanId)?.items||[]).find(it=>it.itemId===itemId); d.items.push({ itemId, name:obj?.name||name, brand:obj?.brand||'', model:obj?.model||'', qty:Math.max(1,Number(r.querySelector('.loan-qty').value)||1), status:prior?.status||'assigned', departedQty:prior?.departedQty||0, returnedQty:prior?.returnedQty||0 }); } } });
   const old=loans.find(x=>x.id===editingLoanId);if(old){(old.items||[]).forEach(prior=>{const stillThere=d.items.find(it=>it.itemId===prior.itemId);if(Number(prior.departedQty||0)>Number(prior.returnedQty||0)&&!stillThere)d.items.push(prior);else if(stillThere)stillThere.qty=Math.max(Number(stillThere.qty)||1,Number(prior.departedQty)||0);});}d.id=editingLoanId||uid(); d.status=old?.status||'draft'; d.createdAt=old?.createdAt||new Date().toISOString(); loans=old?loans.map(x=>x.id===d.id?{...old,...d}:x):[...loans,d]; editingLoanId=null; saveAll(); $('#loanDialog').close(); renderLoans(); };
   $('#itemForm').onsubmit=e=>{
-    try{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); if(photoData) d.photo=photoData; const id=editingId||uid(); const old=items.find(x=>x.id===id); d.id=id; d.status=d.status||'stock'; if(old&&(old.stockQty!=null||old.loanedQty!=null||old.unavailableQty!=null)){const total=Math.max(1,Number(d.quantity)||1);d.loanedQty=Number(old.loanedQty)||0;d.unavailableQty=Number(old.unavailableQty)||0;if(total<d.loanedQty+d.unavailableQty)throw Error(`La quantité totale ne peut pas être inférieure aux unités déjà sorties ou indisponibles (${d.loanedQty+d.unavailableQty}).`);d.stockQty=total-d.loanedQty-d.unavailableQty;d.quantity=total;d.status=d.loanedQty>0?'loaned':d.stockQty>0?'stock':'unavailable';} if(!d.externalQr&&old?.externalQr)d.externalQr=old.externalQr; if(!d.photo&&old?.photo)d.photo=old.photo; items=old?items.map(x=>x.id===id?{...x,...d}:x):[...items,d]; editingId=null; photoData=''; saveAll(); $('#itemDialog').close(); render(); refreshLoanOptions(); }
+    try{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); if(photoData) d.photo=photoData; const id=editingId||uid(); const old=items.find(x=>x.id===id); d.id=id; d.status=d.status||'stock'; d.ownerId=Object.prototype.hasOwnProperty.call(d,'ownerId')?d.ownerId:(old?.ownerId||''); if(old&&(old.stockQty!=null||old.loanedQty!=null||old.unavailableQty!=null)){const total=Math.max(1,Number(d.quantity)||1);d.loanedQty=Number(old.loanedQty)||0;d.unavailableQty=Number(old.unavailableQty)||0;if(total<d.loanedQty+d.unavailableQty)throw Error(`La quantité totale ne peut pas être inférieure aux unités déjà sorties ou indisponibles (${d.loanedQty+d.unavailableQty}).`);d.stockQty=total-d.loanedQty-d.unavailableQty;d.quantity=total;d.status=d.loanedQty>0?'loaned':d.stockQty>0?'stock':'unavailable';} if(!d.externalQr&&old?.externalQr)d.externalQr=old.externalQr; if(!d.photo&&old?.photo)d.photo=old.photo; items=old?items.map(x=>x.id===id?{...x,...d}:x):[...items,d]; if(old&&old.ownerId!==d.ownerId)(items.find(x=>x.id===id).units||[]).forEach(u=>u.ownerId=d.ownerId||''); ensureItemUnits(items.find(x=>x.id===id)); editingId=null; photoData=''; saveAll(); $('#itemDialog').close(); render(); refreshLoanOptions(); }
     catch(err){ console.error('itemForm submit ERR',err); alert('Impossible d’enregistrer cette fiche : '+err.message); }
   };
   $('#closeItem').onclick=$('#cancelItem').onclick=()=>{editingId=null;$('#itemDialog').close();}; $('#itemDialog').addEventListener('close',()=>{editingId=null;});
@@ -171,7 +171,7 @@ function initLoanForm(){
 function refreshLoanOptions(){ const sel=$('#loanItemsSelect'); if(!sel)return; const selected=new Set([...sel.selectedOptions].map(o=>o.value)); sel.innerHTML=items.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} — ${esc(x.model||x.category||'')}</option>`).join(''); [...sel.options].forEach(o=>o.selected=selected.has(o.value)); }
 function refreshKitOptions(){ return items.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} — ${esc(x.model||x.category||'')}</option>`).join(''); }
 function addKitItemRow(){const row=document.createElement('div');row.className='kit-row';row.innerHTML=`<select class="kit-item-select" aria-label="Matériel"><option value="">Choisir un matériel…</option>${refreshKitOptions()}</select><input class="kit-item-qty" type="number" min="1" value="1" aria-label="Quantité dans le kit"><button type="button" class="btn subtle small" aria-label="Supprimer la ligne">✕</button>`;row.querySelector('button').onclick=()=>row.remove();$('#kitRows').appendChild(row);}
-function openEdit(id){ const x=items.find(i=>i.id===id); if(!x)return; editingId=id; photoData=''; resetForm(); $('#dialogTitle').textContent='Modifier le matériel'; for(const [k,v] of Object.entries(x)){const el=$('#itemForm').elements.namedItem(k);if(el&&el.type!=='file')el.value=v??'';} if(x.photo){$('#photoPreview').src=x.photo;$('#photoPreview').hidden=false;} $('#itemDialog').showModal(); }
+function openEdit(id){ const x=items.find(i=>i.id===id); if(!x)return; editingId=id; photoData=''; resetForm(); renderOwnerSelect(); $('#dialogTitle').textContent='Modifier le matériel'; for(const [k,v] of Object.entries(x)){const el=$('#itemForm').elements.namedItem(k);if(el&&el.type!=='file')el.value=v??'';} if(x.photo){$('#photoPreview').src=x.photo;$('#photoPreview').hidden=false;} $('#itemDialog').showModal(); }
 function resetLoan(){ $('#loanForm').reset(); $('#loanRows').innerHTML=''; }
 function resetForm(){ $('#itemForm').reset(); $('#photoPreview').hidden=true; photoData=''; }
 function fillLoanRows(){
@@ -189,6 +189,62 @@ function fillLoanRows(){
 }
 function renumberLoanSelected(){ /* pas besoin */ }
 
+// ---------- propriétaires, identifiants unitaires et étiquettes ----------
+function ownerById(id){return owners.find(o=>o.id===id)||null;}
+function publicToken(){return crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return (c==='x'?r:(r&3|8)).toString(16);});}
+function renderOwnerSelect(){const el=$('#itemOwner');if(!el)return;const current=$('#itemForm')?.elements.ownerId?.value||'';el.innerHTML='<option value="">Propriétaire non renseigné</option>'+owners.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}${o.organization?' · '+esc(o.organization):''}</option>`).join('');el.value=current;}
+function tagPrefix(item){const c=String(item.category||'MAT').toUpperCase();const words=c.normalize('NFD').replace(/[\u0300-\u036f]/g,'').match(/[A-Z0-9]+/g)||['MAT'];return words.map(w=>w[0]).join('').slice(0,3)||'MAT';}
+function newUnitTag(item){const used=new Set(items.flatMap(x=>(x.units||[]).map(u=>u.tag)));let tag;do{tag='#'+tagPrefix(item)+'-'+Math.random().toString(36).slice(2,7).toUpperCase();}while(used.has(tag));return tag;}
+function ensureItemUnits(item){const qty=Math.max(1,Number(item.quantity)||1);if(!Array.isArray(item.units))item.units=[];while(item.units.length<qty){const token=publicToken();item.units.push({id:token,token,tag:newUnitTag(item)});}if(item.units.length>qty)item.units=item.units.slice(0,qty);item.units.forEach(u=>{if(!u.token)u.token=u.id||uid();if(!u.id)u.id=u.token;if(!u.tag)u.tag=newUnitTag(item);if(u.ownerId===undefined)u.ownerId=item.ownerId||'';});return item.units;}
+let editingOwnerId=null;
+function renderOwners(){const box=$('#ownerList');if(!box)return;box.innerHTML=owners.length?owners.map(o=>`<article class="owner-row"><div><strong>${esc(o.name)}</strong><small>${esc(o.organization||'')}${o.phone?' · '+esc(o.phone):''}${o.email?' · '+esc(o.email):''}</small></div><span><button class="btn subtle small" data-owner-edit="${esc(o.id)}">Modifier</button> <button class="btn subtle small" data-owner-delete="${esc(o.id)}">Supprimer</button></span></article>`).join(''):'<p class="muted small">Aucun propriétaire enregistré.</p>';}
+$('#manageOwnersBtn')?.addEventListener('click',()=>{renderOwners();$('#ownersDialog').showModal();});
+$('#ownerForm')?.addEventListener('submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.currentTarget).entries());const o={id:editingOwnerId||uid(),name:d.name.trim(),organization:d.organization.trim(),phone:d.phone.trim(),email:d.email.trim(),showPhone:$('#ownerShowPhone').checked,showEmail:$('#ownerShowEmail').checked};if(!o.name)return;owners=editingOwnerId?owners.map(x=>x.id===editingOwnerId?o:x):[...owners,o];editingOwnerId=null;e.currentTarget.reset();$('#ownerForm button[type=submit]').textContent='Ajouter le propriétaire';renderOwners();renderOwnerSelect();saveAll();});
+$('#ownerList')?.addEventListener('click',e=>{const edit=e.target.closest('[data-owner-edit]');if(edit){const o=ownerById(edit.dataset.ownerEdit);if(!o)return;editingOwnerId=o.id;for(const k of ['name','organization','phone','email'])$('#ownerForm').elements[k].value=o[k]||'';$('#ownerShowPhone').checked=!!o.showPhone;$('#ownerShowEmail').checked=!!o.showEmail;$('#ownerForm button[type=submit]').textContent='Enregistrer les modifications';return;}const b=e.target.closest('[data-owner-delete]');if(!b)return;if(!confirm('Supprimer ce propriétaire ? Les matériels associés ne seront pas supprimés.'))return;owners=owners.filter(o=>o.id!==b.dataset.ownerDelete);items=items.map(x=>x.ownerId===b.dataset.ownerDelete?{...x,ownerId:''}:x);renderOwners();renderOwnerSelect();saveAll();});
+$('#closeOwners')?.addEventListener('click',()=>{editingOwnerId=null;$('#ownerForm').reset();$('#ownerForm button[type=submit]').textContent='Ajouter le propriétaire';$('#ownersDialog').close();});
+async function openLabels(prefillId=''){renderOwnerSelect();const base=$('#labelBaseUrl');if(base)base.value=localStorage.getItem('caverne_portal_base')||'';const list=$('#labelSelection');if(!list)return;if(getSyncSession()?.access_token)await syncNow('auto');const all=[];items.forEach(item=>ensureItemUnits(item).forEach((unit,index)=>all.push({item,unit,index})));persistAll();if(getSyncSession()?.access_token)await syncNow('auto');list.innerHTML=all.length?all.map(({item,unit,index})=>`<div class="label-choice"><input type="checkbox" value="${esc(item.id)}::${esc(unit.token)}" ${prefillId===item.id?'checked':''}><span><b>${esc(item.name)}</b><small>${esc(unit.tag)} · exemplaire ${index+1}/${item.units.length}</small></span><select class="label-owner" data-unit-owner="${esc(item.id)}::${esc(unit.token)}"><option value="">Propriétaire non renseigné</option>${owners.map(o=>`<option value="${esc(o.id)}" ${unit.ownerId===o.id?'selected':''}>${esc(o.name)}</option>`).join('')}</select></div>`).join(''):'<p class="muted">Aucun matériel à étiqueter.</p>';if(!prefillId)list.querySelectorAll('input[type=checkbox]').forEach(x=>x.checked=false);$('#labelsDialog').showModal();}
+$('#printLabelsBtn')?.addEventListener('click',()=>openLabels());
+$('#labelSelection')?.addEventListener('change',e=>{const sel=e.target.closest('[data-unit-owner]');if(!sel)return;const [itemId,token]=sel.dataset.unitOwner.split('::');const item=items.find(x=>x.id===itemId),unit=item?.units?.find(x=>x.token===token);if(unit){unit.ownerId=sel.value;persistAll();if(getSyncSession()?.access_token)syncNow('auto');}});
+$('#labelSelectAll')?.addEventListener('click',()=>$('#labelSelection').querySelectorAll('input[type=checkbox]').forEach(x=>x.checked=true));
+$('#labelSelectNone')?.addEventListener('click',()=>$('#labelSelection').querySelectorAll('input[type=checkbox]').forEach(x=>x.checked=false));
+$('#closeLabels')?.addEventListener('click',()=>$('#labelsDialog').close());$('#closeLabels2')?.addEventListener('click',()=>$('#labelsDialog').close());
+function makePublicLabelUrl(unit,item,base,cfg){const u=new URL('contact.html',base.endsWith('/')?base:base+'/');u.searchParams.set('id',unit.token);u.searchParams.set('project',cfg.url);u.searchParams.set('key',cfg.key);return u.toString();}
+async function publishAndPrintLabels(){
+  const selected=[...$('#labelSelection').querySelectorAll('input:checked')];
+  if(!selected.length)return alert('Sélectionne au moins un exemplaire à imprimer.');
+  const base=$('#labelBaseUrl').value.trim();
+  if(!/^https:\/\//i.test(base))return alert('Saisis l’adresse HTTPS du site publié (GitHub Pages).');
+  localStorage.setItem('caverne_portal_base',base);
+  // Ouvrir la fenêtre pendant le geste utilisateur pour éviter le blocage des pop-ups après le réseau.
+  const printWindow=window.open('','_blank');
+  if(!printWindow)return alert('Autorise les fenêtres surgissantes pour préparer la planche.');
+  try{
+    const cfg=getSyncConfig(),session=await ensureSyncSession(cfg);
+    if(!cfg.url||!cfg.key||!session?.access_token)throw Error('Connecte-toi à Supabase dans Exports & impressions avant de publier les fiches QR.');
+    const records=[],labels=[];
+    for(const checkbox of selected){
+      const [itemId,token]=checkbox.value.split('::');
+      const item=items.find(x=>x.id===itemId),unit=item?.units?.find(x=>x.token===token);
+      if(!item||!unit)continue;
+      const owner=ownerById(unit.ownerId===undefined?item.ownerId:unit.ownerId);
+      records.push({id:unit.token,owner_id:session.user.id,tag:unit.tag,item_name:item.name,brand:item.brand||'',model:item.model||'',owner_name:owner?.name||'',organization:owner?.organization||'',phone:owner?.showPhone?owner.phone:'',email:owner?.showEmail?owner.email:'',updated_at:new Date().toISOString()});
+      labels.push({item,unit,url:makePublicLabelUrl(unit,item,base,cfg)});
+    }
+    if(!labels.length)throw Error('Aucun exemplaire valide dans la sélection.');
+    const selectedOwner=x=>{const u=x.item.units.find(z=>z.token===x.unit.token);return ownerById(u?.ownerId===undefined?x.item.ownerId:u?.ownerId);};
+    const withoutOwner=labels.filter(x=>!selectedOwner(x));
+    const withoutContact=labels.filter(x=>{const o=selectedOwner(x);return o&&!((o.showPhone&&o.phone)||(o.showEmail&&o.email));});
+    const warnings=[];if(withoutOwner.length)warnings.push(`${withoutOwner.length} exemplaire(s) sans propriétaire associé`);if(withoutContact.length)warnings.push(`${withoutContact.length} exemplaire(s) sans moyen de contact rendu public`);
+    if(warnings.length&&!confirm(warnings.join(' et ')+'. Les fiches afficheront les informations disponibles. Continuer ?')){printWindow.close();return;}
+    const r=await fetch(cfg.url.replace(/\/$/,'')+'/rest/v1/caverne_public_labels',{method:'POST',headers:{'apikey':cfg.key,'Authorization':'Bearer '+session.access_token,'Content-Type':'application/json','Accept':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(records)});
+    if(!r.ok)throw Error('Publication des fiches : HTTP '+r.status+'. Vérifie que le SQL des étiquettes publiques a été exécuté.');
+    printLabelSheet(labels,$('#labelFormat').value,printWindow);
+    $('#labelsDialog').close();
+  }catch(err){if(!printWindow.closed)printWindow.close();alert('Impossible de préparer les étiquettes : '+err.message);}
+}
+$('#printSelectedLabels')?.addEventListener('click',publishAndPrintLabels);
+function printLabelSheet(labels,format,w){const sizes={'mini':{w:25,h:25,qr:20,tag:5.2,name:0},'compact':{w:35,h:25,qr:19,tag:6.5,name:6.5},'standard':{w:45,h:30,qr:22,tag:7,name:7}};const z=sizes[format]||sizes.mini;const html=labels.map(({item,unit,url})=>{const qr=makeQR(url);return `<div class="label"><img src="${qr}" alt="QR"><div class="tag">${esc(unit.tag)}</div>${z.name?`<div class="name">${esc(item.name)}</div>`:''}</div>`;}).join('');if(!w||w.closed)return alert('La fenêtre d’impression a été fermée.');w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquettes La Caverne d’Alibaab</title><style>@page{size:A4;margin:8mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#111}.sheet{display:grid;grid-template-columns:repeat(auto-fill,${z.w}mm);grid-auto-rows:${z.h}mm;gap:2mm;align-content:start;justify-content:start}.label{width:${z.w}mm;height:${z.h}mm;border:.2mm dashed #bbb;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:.6mm;background:white;break-inside:avoid}.label img{width:${z.qr}mm;height:${z.qr}mm;object-fit:contain;image-rendering:pixelated}.tag{font-weight:800;font-size:${z.tag}pt;line-height:1.05;margin-top:.3mm;white-space:nowrap}.name{font-size:${z.name}pt;line-height:1.05;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media print{.label{border-color:#ddd}}</style></head><body><main class="sheet">${html}</main><script>window.onload=()=>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();}
+
 function qrLink(id){ return String(id); }
 function makeQR(value){ const qr=new QRCodeLib(0,0); qr.addData(String(value)); qr.make(); const count=qr.getModuleCount(), scale=10, margin=6, canvas=document.createElement('canvas'); canvas.width=canvas.height=(count+margin*2)*scale; const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#111';for(let r=0;r<count;r++)for(let c=0;c<count;c++)if(qr.isDark(r,c))ctx.fillRect((c+margin)*scale,(r+margin)*scale,scale,scale);return canvas.toDataURL('image/png'); }
 
@@ -196,6 +252,7 @@ function makeQR(value){ const qr=new QRCodeLib(0,0); qr.addData(String(value)); 
 document.addEventListener('click', async (e)=>{
   const edit=e.target.closest('[data-edit]'); if(edit){ openEdit(edit.dataset.edit); return; }
   const del=e.target.closest('[data-delete]'); if(del){ if(confirm('Supprimer définitivement cette fiche ?')){ items=items.filter(x=>x.id!==del.dataset.delete); kits=kits.map(k=>({...k,items:(k.items||[]).filter(entry=>(typeof entry==='string'?entry:(entry.itemId||entry.id))!==del.dataset.delete)})); saveAll(); } return; }
+  const labelItem=e.target.closest('[data-label-item]');if(labelItem){openLabels(labelItem.dataset.labelItem);return;}
   const qr=e.target.closest('[data-qr]'); if(qr){ const x=items.find(i=>i.id===qr.dataset.qr); const data=makeQR(qrLink(x.id)); $('#qrTitle').textContent=x.name; $('#qrImage').src=data; $('#qrDialog').showModal(); return; }
   const pr=e.target.closest('[data-print]'); if(pr){ const x=items.find(i=>i.id===pr.dataset.print); printItems([x],true); return; }
   const prl=e.target.closest('[data-printloan]'); if(prl){ const l=loans.find(x=>x.id===prl.dataset.printloan); if(l) printLoan(l); return; }
@@ -227,15 +284,15 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   $('#scannerView').hidden=t.dataset.view!=='scanner'; if(t.dataset.view!=='scanner'&&scannerActive)stopScanner();
   $('#exportsView').hidden=t.dataset.view!=='exports';
 });
-$('#addBtn').onclick=()=>{ resetForm(); $('#itemDialog').showModal(); }
+$('#addBtn').onclick=()=>{ resetForm(); renderOwnerSelect(); $('#itemDialog').showModal(); }
 $('#search').addEventListener('input',renderInventory);$('#statusFilter').addEventListener('change',renderInventory);$('#categoryFilter').addEventListener('change',renderInventory);$('#movementDate').addEventListener('change',renderMovements);
 
 // ---------- exports ----------
 $('#csvBtn').onclick=$('#csvBtn2').onclick=csv;
-async function backup(){ const json=JSON.stringify({version:1,items,kits,travel,loans,movements,exportedAt:new Date().toISOString()},null,2); const name='caverne-alibaab-sauvegarde.json'; const f=new File([json],name,{type:'application/json'}); if(matchMedia('(pointer:coarse)').matches&&navigator.canShare&&navigator.canShare({files:[f]})){ await navigator.share({files:[f],title:'Sauvegarde La caverne d’Alibaab'}); return; } download(name,json,'application/json'); }
+async function backup(){ const json=JSON.stringify({version:2,items,kits,travel,loans,movements,owners,exportedAt:new Date().toISOString()},null,2); const name='caverne-alibaab-sauvegarde.json'; const f=new File([json],name,{type:'application/json'}); if(matchMedia('(pointer:coarse)').matches&&navigator.canShare&&navigator.canShare({files:[f]})){ await navigator.share({files:[f],title:'Sauvegarde La caverne d’Alibaab'}); return; } download(name,json,'application/json'); }
 $('#backupBtn').onclick=$('#backupBtn2').onclick=backup;
 $('#restoreBtn').onclick=()=>$('#restoreFile').click();
-$('#restoreFile').onchange=async e=>{ const f=e.target.files[0]; if(!f)return; try{ const data=JSON.parse(await f.text()); if(!Array.isArray(data.items))throw Error('Fichier non reconnu'); if(confirm('Restaurer cette sauvegarde remplacera les données de cet appareil. Continuer ?')){ items=data.items||[]; kits=data.kits||[]; travel=data.travel||[]; loans=data.loans||[]; movements=data.movements||[]; saveAll(); } }catch(err){ alert('Sauvegarde invalide : '+err.message); } e.target.value=''; };
+$('#restoreFile').onchange=async e=>{ const f=e.target.files[0]; if(!f)return; try{ const data=JSON.parse(await f.text()); if(!Array.isArray(data.items))throw Error('Fichier non reconnu'); if(confirm('Restaurer cette sauvegarde remplacera les données de cet appareil. Continuer ?')){ items=data.items||[]; kits=data.kits||[]; travel=data.travel||[]; loans=data.loans||[]; movements=data.movements||[]; owners=data.owners||[]; saveAll(); } }catch(err){ alert('Sauvegarde invalide : '+err.message); } e.target.value=''; };
 function download(name,content,type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([content],{type})); a.download=name; a.click(); URL.revokeObjectURL(a.href); }
 function csv(){
   const cols=['name','category','brand','model','serial','quantity','status','reason','location','holder','loanDate','dueDate','price','purchaseDate','warranty','condition','notes'];
@@ -497,8 +554,8 @@ function getSyncConfig(){try{return JSON.parse(localStorage.getItem(SYNC_KEY)||'
 function getSyncSession(){try{return JSON.parse(localStorage.getItem(SESSION_KEY)||'null');}catch(e){return null;}}
 async function ensureSyncSession(cfg){let session=getSyncSession();if(!session?.access_token)return null;const expiry=Number(session.expires_at||0);if(expiry&&expiry>Date.now()/1000+90)return session;if(!session.refresh_token)return session;const r=await fetch(cfg.url.replace(/\/$/,'')+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:cfg.key,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:session.refresh_token})});if(!r.ok)return session;session=await r.json();localStorage.setItem(SESSION_KEY,JSON.stringify(session));return session;}
 function setSyncStatus(msg,ok=false){const el=$('#syncStatus');if(el){el.textContent=msg;el.classList.toggle('sync-ok',ok);}}
-function applyState(data){items=data.items||[];kits=data.kits||[];travel=data.travel||[];loans=data.loans||[];movements=data.movements||[];stateUpdatedAt=data.updatedAt||new Date().toISOString();idb.set('state',{items,kits,travel,loans,movements,updatedAt:stateUpdatedAt}).catch(()=>{});render();refreshLoanOptions();}
-function snapshot(){return {items,kits,travel,loans,movements,updatedAt:stateUpdatedAt};}
+function applyState(data){items=data.items||[];kits=data.kits||[];travel=data.travel||[];loans=data.loans||[];movements=data.movements||[];owners=data.owners||[];stateUpdatedAt=data.updatedAt||new Date().toISOString();idb.set('state',{items,kits,travel,loans,movements,owners,updatedAt:stateUpdatedAt}).catch(()=>{});render();refreshLoanOptions();}
+function snapshot(){return {items,kits,travel,loans,movements,owners,updatedAt:stateUpdatedAt};}
 async function syncNow(direction='auto'){
   const cfg=getSyncConfig(); if(!cfg.url||!cfg.key){setSyncStatus('Configure Supabase pour activer la synchronisation.');return;}
   const base=cfg.url.replace(/\/$/,'')+'/rest/v1/caverne_state';

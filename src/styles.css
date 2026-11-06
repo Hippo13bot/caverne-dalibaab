@@ -78,3 +78,15 @@ input,select,textarea{font-size:16px} /* évite le zoom automatique d'iOS */
   #kitCheckDialog .kit-check-rows{max-height:24vh}
   #kitCheckDialog .dialog-actions{position:sticky;bottom:0}
 }
+
+/* Propriétaires et planches d'étiquettes */
+.owner-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.owner-row strong,.owner-row small{display:block}.owner-row small{color:var(--muted);font-size:11px;margin-top:3px;overflow-wrap:anywhere}
+.check-row{display:flex;gap:16px;flex-wrap:wrap;margin:12px 0}.check-row label{display:flex;align-items:center;gap:7px;font-size:12px}
+.label-select-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:14px 0 8px}
+.label-selection{display:grid;gap:5px;max-height:38vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px}
+.label-choice{display:flex!important;align-items:center;gap:10px;padding:8px;border-bottom:1px solid var(--line);margin:0!important;cursor:pointer}
+.label-choice:last-child{border-bottom:0}.label-choice input{width:18px;height:18px;flex:0 0 auto}.label-choice span{display:block;min-width:0}.label-choice b,.label-choice small{display:block}.label-choice b{font-size:13px}.label-choice small{font-size:11px;color:var(--muted);margin-top:2px}
+#ownersDialog,#labelsDialog{max-width:min(680px,calc(100vw - 24px))}
+.label-choice .label-owner{max-width:190px;min-width:120px;padding:7px 8px;font-size:11px;margin-left:auto}
+@media(max-width:560px){.label-choice{flex-wrap:wrap}.label-choice .label-owner{max-width:none;width:100%;margin-left:28px}}

@@ -13,6 +13,9 @@ Inventaire de matériel audiovisuel, photo, son, informatique et accessoires. Un
 - Scénarios de tournage avec besoins associés à l’inventaire, quantités et action de préparation directe.
 - OCR de plaque signalétique pour proposer marque, modèle et numéro de série (connexion internet requise ; vérification humaine nécessaire).
 - Export CSV, sauvegarde/restauration JSON, fiches PDF individuelles et inventaire.
+- Propriétaires multiples avec association à chaque exemplaire physique ; hashtags et QR uniques pour chaque unité, même lorsque plusieurs objets partagent la même référence.
+- Impression de planches A4 à la sélection, en formats 25 × 25 mm, 35 × 25 mm et 45 × 30 mm ; page publique de contact après scan avec téléphone/e-mail affichés uniquement sur autorisation.
+- Configuration des étiquettes QR : exécuter `docs/ETIQUETTES-QR.sql` une fois dans Supabase ; publier les fiches sélectionnées depuis « Exports & impressions ».
 - Stockage local IndexedDB pour rester utilisable hors ligne.
 - Synchronisation périodique Mac ↔ iPhone via Supabase, avec compte utilisateur et règles RLS.
 - Portail web public de demandes de prêt pour clients et collègues : dépôt sans compte avec lien privé de suivi, ou création de compte et historique personnel.
@@ -35,8 +38,8 @@ Inventaire de matériel audiovisuel, photo, son, informatique et accessoires. Un
 1. Pousse le dépôt sur GitHub.
 2. Dans **Actions**, lance « Compiler l'app Mac et Windows » ou crée un tag de version :
    ```bash
-   git tag v1.4.0
-   git push origin v1.3.0
+   git tag v1.5.0
+   git push origin v1.5.0
    ```
 3. Télécharge les installateurs dans les artefacts du workflow ou dans la Release.
 
@@ -64,3 +67,12 @@ Puis ouvre `http://localhost:8000`. La caméra et le service worker nécessitent
 - En cas de modifications simultanées hors ligne, la dernière version horodatée remplace l'autre. Effectue des sauvegardes JSON régulières.
 - Ne mets jamais la clé `service_role` dans l'application ; utilise uniquement la clé publique. Les données synchronisées contiennent potentiellement des coordonnées de clients : protège l'accès à ton compte.
 - L'OCR lit les inscriptions d'une plaque, mais ne garantit pas l'identification visuelle automatique d'un appareil.
+
+
+### Nouveauté 1.5.0 — étiquettes QR propriétaires
+
+- Propriétaires multiples et coordonnées publiques au choix.
+- Hashtag et QR uniques pour chaque exemplaire physique.
+- Sélection des unités et planches A4 en trois formats (25 × 25, 35 × 25 et 45 × 30 mm).
+- Page publique de contact accessible au scan.
+- Configuration SQL complémentaire : `docs/ETIQUETTES-QR.sql`.

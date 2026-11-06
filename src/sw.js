@@ -1,7 +1,7 @@
 // Service worker : l'app fonctionne hors-ligne (chantier, sous-sol, tournage sans réseau)
-const CACHE = 'caverne-alibaab-v5';
+const CACHE = 'caverne-alibaab-v6';
 const SHELL = [
-  './','index.html','styles.css','app.js','qr.js','main.js','preload.js',
+  './','index.html','contact.html','styles.css','app.js','qr.js','main.js','preload.js',
   'mascotte.gif','mascotte-logo.gif','manifest.webmanifest',
   'icons/icon-192.png','icons/icon-512.png','icons/apple-touch-icon.png','icons/favicon-32.png',
   'vendor/html5-qrcode.min.js'
