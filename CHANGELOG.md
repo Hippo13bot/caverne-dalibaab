@@ -1,11 +1,10 @@
+## 1.8.3
+- Code-barres raccourci à la référence unique de l’exemplaire, centré et rendu sans étirement.
+- Conservation de l’ancien code-barres comme alias de scan pour compatibilité avec les étiquettes déjà imprimées.
+- Seconde étiquette simplifiée : nom de l’objet et référence uniquement, sans marque ni modèle.
+- QR agrandi autant que possible sur le format 30 × 14 mm.
+
 # Changelog
-
-## 1.8.2 — 2026-11-09
-- Correction du raster FICHERO D11s : tête thermique 96 px × 240 px et rotation du contenu pour occuper la longueur utile de l’étiquette 30 × 14 mm.
-- Impression par exemplaire de deux étiquettes consécutives : code-barres Code 128 grand format, puis QR anti-perte avec modèle et référence.
-- Publication de la fiche QR avant impression directe ou impression via fenêtre.
-- Progression d’impression détaillée par type d’étiquette.
-
 
 ## 1.7.0 — Scanner renforcé et rouleaux 30 × 14 mm
 - Scanner caméra optimisé : cadence augmentée, zone de lecture plus large et autofocus haute résolution demandé au navigateur.
@@ -42,3 +41,9 @@
 - Impression Bluetooth FICHERO en orientation paysage 30 × 14 mm (240 × 112 pixels à 203 DPI).
 - Code 128 agrandi sur presque toute la surface utile, avec marges de silence et contraste renforcé pour faciliter la lecture au téléphone.
 - Impression classique mise au même format paysage.
+
+## 1.8.2
+- Correction de l’orientation FICHERO D11s : composition paysage 240 × 96 pivotée vers le raster natif 96 × 240 points.
+- Impression enchaînée de deux étiquettes par exemplaire : Code 128, puis QR anti-perte avec nom, modèle et référence.
+- Publication Supabase des fiches publiques avant impression des paires.
+- Progression d’impression comptée par étiquette physique.
