@@ -1,4 +1,14 @@
-# Historique des versions
+# Changelog
+
+## 1.7.0 — Scanner renforcé et rouleaux 30 × 14 mm
+- Scanner caméra optimisé : cadence augmentée, zone de lecture plus large et autofocus haute résolution demandé au navigateur.
+- Retour visuel grand format vert/rouge, bip et vibration lorsque le matériel est reconnu.
+- Fenêtre anti-doublon réduite pour accélérer les inventaires en série.
+- Compatibilité documentée avec les lecteurs USB, Bluetooth et Wi-Fi qui émulent un clavier HID et envoient Entrée.
+- Impression thermique au format personnalisé 30 × 14 mm, une étiquette par page/avance, pour codes-barres Code 128.
+- Ajout de l'impression QR anti-perte pour les unités sélectionnées : publication sécurisée dans la table publique existante, coordonnées uniquement si elles sont autorisées dans la fiche propriétaire.
+- Conservation des anciens identifiants, QR codes, données locales et synchronisation Supabase.
+
 
 ## 1.6.0 — Identification Code 128
 - Remplacement des nouvelles étiquettes matériel par des codes-barres Code 128, un identifiant par exemplaire.
@@ -12,3 +22,10 @@
 
 ## 1.5.2
 - Correction de la reconnaissance des étiquettes QR publiques.
+
+## 1.8.0 — Impression Bluetooth FICHERO
+- Ajout d’un pilote BLE intégré pour les imprimantes FICHERO D11s / AiYin D11s.
+- Connexion depuis la fenêtre d’étiquettes et impression directe des codes-barres sans passer par l’application mobile ni la boîte de dialogue système.
+- Rendu monochrome natif 96 × 240 pixels et envoi du protocole AiYin documenté.
+- Conservation de l’impression système comme solution de secours.
+- La compatibilité matérielle doit être confirmée par un premier test sur l’imprimante réelle.

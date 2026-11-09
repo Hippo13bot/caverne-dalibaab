@@ -87,3 +87,10 @@ Puis ouvre `http://localhost:8000`. La caméra et le service worker nécessitent
 - Sélection des unités et planches A4 en trois formats (25 × 25, 35 × 25 et 45 × 30 mm).
 - Page publique de contact accessible au scan.
 - Configuration SQL complémentaire : `docs/ETIQUETTES-QR.sql`.
+
+
+## Impression directe FICHERO D11s (v1.8.0)
+
+La version de bureau Mac/Windows intègre un pilote Bluetooth BLE pour les modèles FICHERO D11s / AiYin D11s. Allume l’imprimante, ouvre **Étiquettes**, sélectionne les exemplaires, puis utilise **Connecter FICHERO** ou **Imprimer directement**. Le premier accès demande l’autorisation Bluetooth du système. Ferme l’application mobile FICHERO avant la connexion. L’impression système reste disponible en secours.
+
+Le pilote cible les appareils Bluetooth dont le nom commence par `FICHERO` ou `D11s`. La compatibilité et le calibrage doivent être validés avec un premier exemplaire physique ; le protocole BLE et le raster 96 × 240 sont basés sur la documentation publique du modèle D11s. La version web/PWA n’offre pas cette intégration dans Safari ; utiliser l’application de bureau ou un navigateur compatible Web Bluetooth.

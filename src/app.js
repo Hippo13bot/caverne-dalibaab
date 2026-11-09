@@ -222,24 +222,73 @@ $('#printLabelsBtn')?.addEventListener('click',()=>openLabels());
 $('#labelSelectAll')?.addEventListener('click',()=>$('#labelSelection').querySelectorAll('input[type=checkbox]').forEach(x=>x.checked=true));
 $('#labelSelectNone')?.addEventListener('click',()=>$('#labelSelection').querySelectorAll('input[type=checkbox]').forEach(x=>x.checked=false));
 $('#closeLabels')?.addEventListener('click',()=>$('#labelsDialog').close());$('#closeLabels2')?.addEventListener('click',()=>$('#labelsDialog').close());
-function printSelectedBarcodeLabels(){
+function selectedLabelUnits(){
   const selected=[...$('#labelSelection').querySelectorAll('input:checked')];
-  if(!selected.length)return alert('Sélectionne au moins un exemplaire à imprimer.');
-  const printWindow=window.open('','_blank');if(!printWindow)return alert('Autorise les fenêtres surgissantes pour préparer la planche.');
+  const labels=[];
+  for(const checkbox of selected){const [itemId,token]=checkbox.value.split('::');const item=items.find(x=>x.id===itemId),unit=item?.units?.find(x=>x.token===token);if(item&&unit){unit.barcode=unit.barcode||('CA-'+String(unit.tag).replace(/^#/,''));labels.push({item,unit});}}
+  return labels;
+}
+function printSelectedBarcodeLabels(){
+  const labels=selectedLabelUnits();
+  if(!labels.length)return alert('Sélectionne au moins un exemplaire à imprimer.');
+  const printWindow=window.open('','_blank');if(!printWindow)return alert('Autorise les fenêtres surgissantes pour préparer le rouleau.');
+  try{persistAll();printLabelRoll(labels,'barcode',printWindow);$('#labelsDialog').close();}
+  catch(err){if(!printWindow.closed)printWindow.close();alert('Impossible de préparer les étiquettes : '+err.message);}
+}
+async function connectFicheroPrinter(){
+  const status=$('#ficheroPrinterStatus');
+  status.textContent='Recherche Bluetooth… Allume l’imprimante et garde-la à proximité.';
+  const info=await FicheroPrinter.connect();
+  status.textContent='Connectée : '+info.name+' · prête à imprimer.';
+  return info;
+}
+$('#connectFicheroPrinter')?.addEventListener('click',()=>connectFicheroPrinter().catch(err=>{$('#ficheroPrinterStatus').textContent='Connexion impossible : '+err.message;}));
+$('#printDirectFichero')?.addEventListener('click',async()=>{
+  const labels=selectedLabelUnits();
+  if(!labels.length)return alert('Sélectionne au moins un exemplaire à imprimer.');
+  const button=$('#printDirectFichero'),status=$('#ficheroPrinterStatus');button.disabled=true;
   try{
-    const labels=[];
-    for(const checkbox of selected){const [itemId,token]=checkbox.value.split('::');const item=items.find(x=>x.id===itemId),unit=item?.units?.find(x=>x.token===token);if(item&&unit){unit.barcode=unit.barcode||('CA-'+String(unit.tag).replace(/^#/,''));labels.push({item,unit});}}
-    if(!labels.length)throw Error('Aucun exemplaire valide dans la sélection.');
-    persistAll();printLabelSheet(labels,$('#labelFormat').value,printWindow);$('#labelsDialog').close();
-  }catch(err){if(!printWindow.closed)printWindow.close();alert('Impossible de préparer les étiquettes : '+err.message);}
+    status.textContent='Connexion à l’imprimante FICHERO…';
+    const info=await FicheroPrinter.connect();
+    await FicheroPrinter.print(labels,'barcode',({current,total})=>{status.textContent='Impression Bluetooth : '+current+' / '+total+' étiquette(s)…';});
+    status.textContent='Envoi terminé : '+labels.length+' étiquette(s) envoyée(s) à '+info.name+'.';persistAll();
+  }catch(err){status.textContent='Erreur d’impression : '+err.message;alert('Impression FICHERO : '+err.message+'\n\nVérifie que l’imprimante est allumée, chargée et déconnectée de l’application du téléphone.');}
+  finally{button.disabled=false;}
+});
+
+function printLabelRoll(labels,type,w){
+  const html=labels.map(({item,unit})=>{
+    if(type==='owner-qr')return `<div class="label qr-label"><img src="${makeQR(unit.publicUrl)}" alt="QR propriétaire"><div class="label-copy"><b>${esc(unit.tag)}</b><small>MATÉRIEL RETROUVÉ</small></div></div>`;
+    return `<div class="label barcode-label"><img src="${Code128Barcode.dataUri(unit.barcode)}" alt="Code-barres"><b>${esc(unit.tag)}</b><small>${esc(item.name)}</small></div>`;
+  }).join('');
+  if(!w||w.closed)throw Error('La fenêtre d’impression a été fermée.');
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquettes 30 × 14 mm</title><style>
+  @page{size:30mm 14mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:30mm;background:#fff;color:#000;font-family:Arial,sans-serif}
+  .label{width:30mm;height:14mm;overflow:hidden;display:flex;align-items:center;justify-content:center;break-after:page;page-break-after:always;background:#fff;padding:.45mm;gap:.5mm}
+  .label:last-child{break-after:auto;page-break-after:auto}.barcode-label{flex-direction:column}.barcode-label img{width:27.5mm;height:7mm;object-fit:fill;display:block}.barcode-label b{font-size:6pt;line-height:1;font-weight:900}.barcode-label small{font-size:4.2pt;line-height:1;max-width:29mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qr-label{flex-direction:row;justify-content:flex-start}.qr-label img{width:12.4mm;height:12.4mm;object-fit:contain;display:block}.label-copy{display:flex;flex-direction:column;gap:1mm;min-width:0}.label-copy b{font-size:7pt;white-space:nowrap}.label-copy small{font-size:4pt;font-weight:700;line-height:1.1}
+  @media screen{body{background:#ddd}.label{margin:5mm auto;box-shadow:0 1px 5px #777}}
+  </style></head><body>${html}<script>window.onload=()=>setTimeout(()=>window.print(),350)<\/script></body></html>`);w.document.close();
 }
-$('#printSelectedLabels')?.addEventListener('click',printSelectedBarcodeLabels);
-function printLabelSheet(labels,format,w){
-  const sizes={mini:{w:35,h:18,barcode:29,tag:5.5,name:5.2},compact:{w:45,h:22,barcode:39,tag:6.5,name:6},standard:{w:55,h:25,barcode:48,tag:7.2,name:6.8}};const z=sizes[format]||sizes.compact;
-  const html=labels.map(({item,unit})=>{return `<div class="label"><img src="${Code128Barcode.dataUri(unit.barcode)}" alt="Code-barres"><div class="tag">${esc(unit.tag)}</div><div class="name">${esc(item.name)}</div></div>`;}).join('');
-  if(!w||w.closed)return alert('La fenêtre d’impression a été fermée.');
-  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquettes Code 128 — La Caverne d’Alibaab</title><style>@page{size:A4;margin:8mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#111}.sheet{display:grid;grid-template-columns:repeat(auto-fill,${z.w}mm);grid-auto-rows:${z.h}mm;gap:2mm;align-content:start;justify-content:start}.label{width:${z.w}mm;height:${z.h}mm;border:.2mm dashed #bbb;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:.5mm;background:white;break-inside:avoid}.label img{display:block;width:${z.barcode}mm;height:auto;max-height:9mm;object-fit:contain}.tag{font-weight:800;font-size:${z.tag}pt;line-height:1;margin-top:.1mm;white-space:nowrap}.name{font-size:${z.name}pt;line-height:1.05;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media print{.label{border-color:#ddd}}</style></head><body><main class="sheet">${html}</main><script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);w.document.close();
+async function printSelectedOwnerQrLabels(){
+  const labels=selectedLabelUnits();if(!labels.length)return alert('Sélectionne au moins un exemplaire.');
+  const printWindow=window.open('','_blank');if(!printWindow)return alert('Autorise les fenêtres surgissantes pour préparer les QR.');
+  const cfg=getSyncConfig();
+  if(!cfg.url||!cfg.key){printWindow.close();return alert('Configure Supabase dans Exports & impressions avant de publier les QR anti-perte.');}
+  const session=await ensureSyncSession(cfg);
+  if(!session?.access_token){printWindow.close();return alert('Connecte-toi au compte propriétaire dans Exports & impressions avant de publier les QR anti-perte.');}
+  const base=(localStorage.getItem('caverne_portal_base')||$('#portalBaseUrl')?.value||'').trim().replace(/\/$/,'');
+  if(!/^https:\/\//i.test(base))return alert('Renseigne et publie d’abord l’adresse GitHub Pages dans Portail clients & collègues.');
+  try{
+    const rows=labels.map(({item,unit})=>{const owner=ownerById(unit.ownerId||item.ownerId);if(!owner)throw Error('Aucun propriétaire associé à « '+item.name+' ». Affecte un propriétaire à ce matériel.');return {id:unit.token,owner_id:session.user.id,tag:unit.tag,item_name:item.name,brand:item.brand||'',model:item.model||'',owner_name:owner.name,organization:owner.organization||'',phone:owner.showPhone?owner.phone||'':'',email:owner.showEmail?owner.email||'':'',updated_at:new Date().toISOString()};});
+    const url=cfg.url.replace(/\/$/,'')+'/rest/v1/caverne_public_labels?on_conflict=owner_id,tag';
+    const response=await fetch(url,{method:'POST',headers:{apikey:cfg.key,Authorization:'Bearer '+session.access_token,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
+    if(!response.ok)throw Error('Publication Supabase impossible (HTTP '+response.status+'). Vérifie que docs/ETIQUETTES-QR.sql a été exécuté.');
+    labels.forEach(({unit})=>{unit.publicUrl=base+'/contact.html?id='+encodeURIComponent(unit.token)+'&project='+encodeURIComponent(cfg.url)+'&key='+encodeURIComponent(cfg.key);});persistAll();
+    printLabelRoll(labels,'owner-qr',printWindow);$('#labelsDialog').close();
+  }catch(err){if(!printWindow.closed)printWindow.close();alert('QR anti-perte : '+err.message);}
 }
+$('#printOwnerQrLabels')?.addEventListener('click',printSelectedOwnerQrLabels);
 
 function qrLink(id){ return String(id); }
 function makeQR(value){ const qr=new QRCodeLib(0,0); qr.addData(String(value)); qr.make(); const count=qr.getModuleCount(), scale=10, margin=6, canvas=document.createElement('canvas'); canvas.width=canvas.height=(count+margin*2)*scale; const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#111';for(let r=0;r<count;r++)for(let c=0;c<count;c++)if(qr.isDark(r,c))ctx.fillRect((c+margin)*scale,(r+margin)*scale,scale,scale);return canvas.toDataURL('image/png'); }
@@ -388,17 +437,18 @@ function initScanner(){
     if($('#scannerView')?.hidden)return;
     if(event.target?.closest('input,textarea,select,[contenteditable="true"]'))return;
     const now=Date.now();
-    if(event.key==='Enter'){
+    if(event.key==='Enter'||event.key==='Tab'){
       const value=keyboardScanBuffer;keyboardScanBuffer='';keyboardScanLastAt=0;
       if(value.length>=5){event.preventDefault();onScanSuccess(value);}
       return;
     }
     if(event.key.length===1 && event.key.charCodeAt(0)>=32 && event.key.charCodeAt(0)<=126){
-      if(now-keyboardScanLastAt>100)keyboardScanBuffer='';
+      if(now-keyboardScanLastAt>250)keyboardScanBuffer='';
       keyboardScanBuffer+=event.key;keyboardScanLastAt=now;
       if(keyboardScanBuffer.length>100)keyboardScanBuffer=keyboardScanBuffer.slice(-100);
     }
   });
+  $('#readerHelp')?.addEventListener('click',()=>alert('LECTEUR USB / BLUETOOTH / WI-FI\n\n1. Allume le lecteur et active le mode clavier (HID / Keyboard Wedge).\n2. Pour Bluetooth : associe-le dans les réglages Bluetooth de macOS, Windows, iPhone ou iPad.\n3. Pour Wi-Fi : configure le lecteur ou son dongle en mode clavier réseau/HID selon sa notice. Un lecteur Wi-Fi propriétaire qui envoie des données via une application ou un serveur nécessitera son protocole exact.\n4. Ouvre cet onglet SCANNERS, clique dans la page puis scanne. Le lecteur doit envoyer Entrée (ou Tab) après le code.\n\nUn lecteur HID n’a pas besoin d’être appairé depuis La Caverne : le système le présente comme un clavier.'));
   $('#scanToggle').onclick=async()=>{ if(!scannerActive) await unlockScanFeedback(); scannerActive?stopScanner():startScanner(); };
 }
 function setScannerMode(mode){
@@ -412,7 +462,7 @@ async function startScanner(){
   $('#scanContainer').hidden=false; $('#scanError').hidden=true;
   try{
     scanner=new Html5Qrcode('scanContainer',{formatsToSupport:[Html5QrcodeSupportedFormats.CODE_128,Html5QrcodeSupportedFormats.QR_CODE]});
-    await scanner.start({facingMode:'environment'},{fps:10,qrbox:(w,h)=>({width:Math.min(420,w-30),height:Math.min(240,h-30)}),aspectRatio:1.6},onScanSuccess,()=>{});
+    await scanner.start({facingMode:'environment'},{fps:18,qrbox:(w,h)=>({width:Math.min(520,w-24),height:Math.min(190,h-24)}),aspectRatio:1.8, videoConstraints:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}},onScanSuccess,()=>{});
     scannerActive=true; $('#scanToggle').textContent='Arrêter la caméra'; $('#scanStatus').textContent='Caméra prête.';
   }catch(err){ scanner=null; $('#scanError').textContent='Impossible de lancer la caméra. Sur iPhone, ouvre l’app depuis Safari ou l’écran d’accueil et autorise l’accès à la caméra. '+(err?.message||''); $('#scanError').hidden=false; }
 }
@@ -443,18 +493,26 @@ async function unlockScanFeedback(){
     const osc=scanAudioContext.createOscillator(),gain=scanAudioContext.createGain();gain.gain.value=0.00001;osc.connect(gain);gain.connect(scanAudioContext.destination);osc.start();osc.stop(scanAudioContext.currentTime+0.015);
   }catch(e){console.warn('Audio scanner indisponible',e);}
 }
+function showScanFlash(ok=true,title='SCAN RÉUSSI',detail='Matériel reconnu'){
+  let flash=$('#scanFlash');
+  if(!flash){flash=document.createElement('div');flash.id='scanFlash';flash.className='scan-flash';$('#scannerView')?.prepend(flash);}
+  flash.className='scan-flash '+(ok?'success':'failure');
+  flash.innerHTML=`<strong>${ok?'✓':'!' } ${esc(title)}</strong><span>${esc(detail)}</span>`;
+  flash.hidden=false;clearTimeout(window.__scanFlashTimer);window.__scanFlashTimer=setTimeout(()=>{flash.hidden=true;},1250);
+}
 function scanFeedback(){
+  showScanFlash(true,'SCAN RÉUSSI',lastScanValue||'Code détecté');
   try{if(navigator.vibrate)navigator.vibrate([55,35,55]);}catch(e){}
   try{const ctx=scanAudioContext;if(ctx&&ctx.state==='running'){const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='sine';osc.frequency.setValueAtTime(1050,ctx.currentTime);gain.gain.setValueAtTime(.0001,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(.10,ctx.currentTime+.008);gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+.12);osc.connect(gain);gain.connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+.13);}}catch(e){console.warn('Bip scanner impossible',e);}
 }
 function onScanSuccess(decodedText){
   const safe=String(decodedText||'').trim(), now=Date.now();
-  if(!safe||(safe===lastScanValue&&now-lastScanAt<1800))return;
+  if(!safe||(safe===lastScanValue&&now-lastScanAt<850))return;
   lastScanValue=safe;lastScanAt=now;
   const label=$('#scanStatus');
   // Pendant un contrôle détaillé, chaque QR matériel scanné coche une unité du kit.
   if(kitCheck){
-    const checkedItem=findItemByScannedCode(safe);if(!checkedItem){label.textContent='QR non reconnu pour ce kit : '+safe.slice(0,50);return;}
+    const checkedItem=findItemByScannedCode(safe);if(!checkedItem){showScanFlash(false,'CODE INCONNU','Non associé à ce kit');label.textContent='Code non reconnu pour ce kit : '+safe.slice(0,50);return;}
     const line=kitCheck.lines.find(z=>z.itemId===checkedItem.id);if(!line){label.textContent=`${checkedItem.name} ne fait pas partie du kit « ${kitCheck.kit.name} ».`;addScanLog('Hors kit : '+checkedItem.name,'unknown');return;}
     if(line.scanned>=line.required){label.textContent=`Quantité déjà complète pour ${checkedItem.name} (${line.required}/${line.required}).`;return;}
     line.scanned++;scanFeedback();renderKitCheck();label.textContent=`✓ ${checkedItem.name} · ${line.scanned}/${line.required}`;addScanLog(`${kitCheck.mode==='return'?'Retour':'Contrôle'} kit : ${checkedItem.name} ${line.scanned}/${line.required}`,'ok');return;
@@ -468,13 +526,13 @@ function onScanSuccess(decodedText){
   const x=findItemByScannedCode(safe);
   if(scannerMode==='scan'){
     if(x){scanFeedback();openEdit(x.id);label.textContent=`Fiche ouverte : ${x.name}`;addScanLog('✓ '+x.name,'ok');}
-    else {
+    else {showScanFlash(false,'CODE NON ASSOCIÉ','Matériel introuvable dans cet inventaire');
       const choice=prompt('Code reconnu mais non associé.\nColle ce code dans la fiche d’un matériel existant ou saisis le nom du matériel à créer.\n\nCode : '+safe+'\n\nNom du matériel (laisser vide pour ignorer) :');
       if(choice){const name=choice.trim();if(name){const existing=items.find(i=>i.name.toLowerCase()===name.toLowerCase());if(existing){existing.externalQr=safe;saveAll();label.textContent=`QR associé à ${existing.name}`;addScanLog('QR associé : '+existing.name,'ok');}else{if(confirm(`Créer une fiche « ${name} » avec ce QR ?`)){editingId=null;resetForm();$('#itemForm').elements.name.value=name;$('#itemForm').elements.externalQr.value=safe;$('#itemDialog').showModal();}}}}
       else {label.textContent='QR mémorisé non associé : '+safe.slice(0,70);addScanLog('? '+safe.slice(0,70),'unknown');}
     }
   }else if(scannerMode==='depart'){
-    if(!x){label.textContent='Code non associé à un équipement. Passe en mode SCAN pour l’associer.';addScanLog('? '+safe.slice(0,60),'unknown');return;}
+    if(!x){showScanFlash(false,'CODE INCONNU','Aucun équipement associé');label.textContent='Code non associé à un équipement. Passe en mode SCAN pour l’associer.';addScanLog('? '+safe.slice(0,60),'unknown');return;}
     const queued=departureQueue.find(q=>q.itemId===x.id);const already=Number(queued?.qty)||0;const max=Math.max(0,Number(x.stockQty??(x.status==='stock'?x.quantity:0))||0);if(max<=0){label.textContent=`Aucune unité disponible en stock pour ${x.name}.`;return;}if(already>=max){label.textContent=`Quantité maximale atteinte pour ${x.name} (${max}).`;return;}if(queued)queued.qty=already+1;else departureQueue.push({itemId:x.id,name:x.name,qty:1,status:'assigned'});scanFeedback();label.textContent=`✓ ${x.name} · ${queued?'quantité scannée mise à jour':'ajouté à la liste'} (${(queued?.qty)||1} / ${max}).`;addScanLog('+ '+x.name+' · '+(queued?.qty||1)+' scanné(s)','ok');
     $('#scanResults').innerHTML=`<p><strong>${departureQueue.length}</strong> matériel(s) dans la liste de départ.</p><button class="btn primary" id="openDepartureQueue">Vérifier et valider le départ</button>`;
     $('#openDepartureQueue').onclick=()=>{populateDeparture();$('#departureDialog').showModal();};

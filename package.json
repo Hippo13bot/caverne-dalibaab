@@ -1,7 +1,7 @@
 {
   "name": "caverne-dalibaab",
-  "version": "1.6.0",
-  "description": "Gestion professionnelle de parc matériel audiovisuel, prêts, kits et inventaire avec codes-barres Code 128",
+  "version": "1.8.0",
+  "description": "Gestion professionnelle de parc matériel audiovisuel, prêts, kits et inventaire avec impression Bluetooth FICHERO D11s",
   "main": "src/main.js",
   "author": "La caverne d'Alibaab",
   "license": "MIT",
@@ -40,7 +40,11 @@
         }
       ],
       "artifactName": "La-caverne-dAlibaab-${version}-Mac-${arch}.${ext}",
-      "identity": null
+      "identity": null,
+      "extendInfo": {
+        "NSBluetoothAlwaysUsageDescription": "La Caverne d’Alibaab utilise le Bluetooth pour connecter et imprimer directement sur votre étiqueteuse FICHERO.",
+        "NSBluetoothPeripheralUsageDescription": "La Caverne d’Alibaab utilise le Bluetooth pour communiquer avec votre étiqueteuse FICHERO."
+      }
     },
     "win": {
       "icon": "assets/icon.png",
