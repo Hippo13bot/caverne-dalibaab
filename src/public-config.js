@@ -1,9 +1,5 @@
-/* Configuration publique du portail anti-perte.
- * Renseigner ces deux valeurs avec l'URL du projet Supabase et sa clé anon/publishable.
- * La clé anon/publishable est publique par conception : la sécurité repose sur RLS
- * et sur les seules coordonnées que le propriétaire a explicitement autorisées.
- */
+/* Configuration publique du portail anti-perte (clé anon/publishable uniquement). */
 window.CAVERNE_PUBLIC_CONFIG = {
-  supabaseUrl: '',
-  supabaseAnonKey: ''
+  supabaseUrl: 'https://cpczqpyiizlbowesdkig.supabase.co',
+  supabaseAnonKey: 'sb_publishable_Dmn-pyyS2z6RNWcLFr3Yvw_MhACMpYN'
 };
