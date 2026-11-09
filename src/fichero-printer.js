@@ -6,7 +6,7 @@
   const SERVICE = '000018f0-0000-1000-8000-00805f9b34fb';
   const WRITE = '00002af1-0000-1000-8000-00805f9b34fb';
   const NOTIFY = '00002af0-0000-1000-8000-00805f9b34fb';
-  const WIDTH = 96, HEIGHT = 240;
+  const WIDTH = 240, HEIGHT = 112; // 30 × 14 mm à 203 dpi, orientation paysage
   let device = null, characteristic = null, server = null;
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   const command = (...bytes) => new Uint8Array(bytes);
@@ -56,17 +56,15 @@
     const canvas = document.createElement('canvas'); canvas.width = WIDTH; canvas.height = HEIGHT;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-    ctx.fillStyle = '#000'; ctx.textAlign = 'center';
-    const title = String(label.unit.tag || '').slice(0, 18);
-    ctx.font = 'bold 17px Arial'; ctx.fillText(title, WIDTH / 2, 22, 90);
+    ctx.fillStyle = '#000'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     if (type === 'barcode') {
+      // Code 128 presque pleine largeur : barres hautes, contraste maximal,
+      // marges de silence conservées pour les lecteurs de téléphone.
       const img = new Image(); img.src = Code128Barcode.dataUri(label.unit.barcode);
       return new Promise((resolve, reject) => {
         img.onload = () => {
           ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(img, 2, 42, 92, 104);
-          ctx.font = 'bold 11px Arial'; ctx.fillText(String(label.item.name || '').slice(0, 24), WIDTH / 2, 168, 92);
-          ctx.font = '10px Arial'; ctx.fillText(String(label.unit.barcode || '').slice(0, 22), WIDTH / 2, 188, 92);
+          ctx.drawImage(img, 5, 3, 230, 106);
           resolve(toRaster(canvas));
         };
         img.onerror = () => reject(new Error('Impossible de générer le code-barres.'));
@@ -74,7 +72,7 @@
     }
     const qr = new Image(); qr.src = makeQR(label.unit.publicUrl);
     return new Promise((resolve, reject) => {
-      qr.onload = () => { ctx.drawImage(qr, 8, 34, 80, 80); ctx.font = 'bold 12px Arial'; ctx.fillText('MATÉRIEL RETROUVÉ', WIDTH / 2, 134, 94); resolve(toRaster(canvas)); };
+      qr.onload = () => { ctx.drawImage(qr, 8, 2, 108, 108); ctx.font = 'bold 15px Arial'; ctx.fillText(String(label.unit.tag || '').slice(0, 18), 178, 42, 112); ctx.font = 'bold 12px Arial'; ctx.fillText('MATÉRIEL RETROUVÉ', 178, 67, 112); resolve(toRaster(canvas)); };
       qr.onerror = () => reject(new Error('Impossible de générer le QR code.'));
     });
   }
@@ -100,7 +98,7 @@
       await write(command(0x10, 0xff, 0x84, 0x00));       // papier à espace / gap
       await write(new Uint8Array(12));                   // réveil
       await write(command(0x10, 0xff, 0xfe, 0x01));       // activation AiYin
-      const header = command(0x1d, 0x76, 0x30, 0x00, 0x0c, 0x00, HEIGHT & 0xff, HEIGHT >> 8);
+      const header = command(0x1d, 0x76, 0x30, 0x00, WIDTH / 8, 0x00, HEIGHT & 0xff, HEIGHT >> 8);
       await write(header);
       await write(raster);
       await write(command(0x1d, 0x0c));                  // avance à l'étiquette suivante

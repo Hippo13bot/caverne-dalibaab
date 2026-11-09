@@ -1,7 +1,7 @@
 {
   "name": "caverne-dalibaab",
-  "version": "1.8.0",
-  "description": "Gestion professionnelle de parc matériel audiovisuel, prêts, kits et inventaire avec impression Bluetooth FICHERO D11s",
+  "version": "1.8.1",
+  "description": "Gestion professionnelle de parc matériel audiovisuel, prêts, kits et inventaire avec impression Bluetooth FICHERO D11s en paysage",
   "main": "src/main.js",
   "author": "La caverne d'Alibaab",
   "license": "MIT",

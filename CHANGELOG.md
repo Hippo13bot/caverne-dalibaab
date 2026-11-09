@@ -29,3 +29,9 @@
 - Rendu monochrome natif 96 × 240 pixels et envoi du protocole AiYin documenté.
 - Conservation de l’impression système comme solution de secours.
 - La compatibilité matérielle doit être confirmée par un premier test sur l’imprimante réelle.
+
+
+## 1.8.1 — Étiquettes paysage et code-barres agrandi
+- Impression Bluetooth FICHERO en orientation paysage 30 × 14 mm (240 × 112 pixels à 203 DPI).
+- Code 128 agrandi sur presque toute la surface utile, avec marges de silence et contraste renforcé pour faciliter la lecture au téléphone.
+- Impression classique mise au même format paysage.

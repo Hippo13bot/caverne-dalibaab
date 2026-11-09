@@ -265,7 +265,7 @@ function printLabelRoll(labels,type,w){
   w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquettes 30 × 14 mm</title><style>
   @page{size:30mm 14mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:30mm;background:#fff;color:#000;font-family:Arial,sans-serif}
   .label{width:30mm;height:14mm;overflow:hidden;display:flex;align-items:center;justify-content:center;break-after:page;page-break-after:always;background:#fff;padding:.45mm;gap:.5mm}
-  .label:last-child{break-after:auto;page-break-after:auto}.barcode-label{flex-direction:column}.barcode-label img{width:27.5mm;height:7mm;object-fit:fill;display:block}.barcode-label b{font-size:6pt;line-height:1;font-weight:900}.barcode-label small{font-size:4.2pt;line-height:1;max-width:29mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .label:last-child{break-after:auto;page-break-after:auto}.barcode-label{flex-direction:row;gap:0;padding:0}.barcode-label img{width:29mm;height:12.8mm;object-fit:fill;display:block}.barcode-label b,.barcode-label small{display:none}
   .qr-label{flex-direction:row;justify-content:flex-start}.qr-label img{width:12.4mm;height:12.4mm;object-fit:contain;display:block}.label-copy{display:flex;flex-direction:column;gap:1mm;min-width:0}.label-copy b{font-size:7pt;white-space:nowrap}.label-copy small{font-size:4pt;font-weight:700;line-height:1.1}
   @media screen{body{background:#ddd}.label{margin:5mm auto;box-shadow:0 1px 5px #777}}
   </style></head><body>${html}<script>window.onload=()=>setTimeout(()=>window.print(),350)<\/script></body></html>`);w.document.close();
