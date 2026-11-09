@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.2 — 2026-11-09
+- Correction du raster FICHERO D11s : tête thermique 96 px × 240 px et rotation du contenu pour occuper la longueur utile de l’étiquette 30 × 14 mm.
+- Impression par exemplaire de deux étiquettes consécutives : code-barres Code 128 grand format, puis QR anti-perte avec modèle et référence.
+- Publication de la fiche QR avant impression directe ou impression via fenêtre.
+- Progression d’impression détaillée par type d’étiquette.
+
+
 ## 1.7.0 — Scanner renforcé et rouleaux 30 × 14 mm
 - Scanner caméra optimisé : cadence augmentée, zone de lecture plus large et autofocus haute résolution demandé au navigateur.
 - Retour visuel grand format vert/rouge, bip et vibration lorsque le matériel est reconnu.

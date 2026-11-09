@@ -228,13 +228,16 @@ function selectedLabelUnits(){
   for(const checkbox of selected){const [itemId,token]=checkbox.value.split('::');const item=items.find(x=>x.id===itemId),unit=item?.units?.find(x=>x.token===token);if(item&&unit){unit.barcode=unit.barcode||('CA-'+String(unit.tag).replace(/^#/,''));labels.push({item,unit});}}
   return labels;
 }
-function printSelectedBarcodeLabels(){
+async function printSelectedBarcodeLabels(){
   const labels=selectedLabelUnits();
   if(!labels.length)return alert('Sélectionne au moins un exemplaire à imprimer.');
   const printWindow=window.open('','_blank');if(!printWindow)return alert('Autorise les fenêtres surgissantes pour préparer le rouleau.');
-  try{persistAll();printLabelRoll(labels,'barcode',printWindow);$('#labelsDialog').close();}
-  catch(err){if(!printWindow.closed)printWindow.close();alert('Impossible de préparer les étiquettes : '+err.message);}
+  try{await publishOwnerQrLabels(labels);persistAll();printLabelRoll(labels,'pair',printWindow);$('#labelsDialog').close();}
+  catch(err){if(!printWindow.closed)printWindow.close();alert('Préparation des deux étiquettes impossible : '+err.message);}
 }
+
+$('#printSelectedLabels')?.addEventListener('click',printSelectedBarcodeLabels);
+
 async function connectFicheroPrinter(){
   const status=$('#ficheroPrinterStatus');
   status.textContent='Recherche Bluetooth… Allume l’imprimante et garde-la à proximité.';
@@ -248,45 +251,50 @@ $('#printDirectFichero')?.addEventListener('click',async()=>{
   if(!labels.length)return alert('Sélectionne au moins un exemplaire à imprimer.');
   const button=$('#printDirectFichero'),status=$('#ficheroPrinterStatus');button.disabled=true;
   try{
+    status.textContent='Publication des QR anti-perte…';
+    await publishOwnerQrLabels(labels);
     status.textContent='Connexion à l’imprimante FICHERO…';
     const info=await FicheroPrinter.connect();
-    await FicheroPrinter.print(labels,'barcode',({current,total})=>{status.textContent='Impression Bluetooth : '+current+' / '+total+' étiquette(s)…';});
-    status.textContent='Envoi terminé : '+labels.length+' étiquette(s) envoyée(s) à '+info.name+'.';persistAll();
+    await FicheroPrinter.print(labels,'pair',({current,total,kind,item})=>{status.textContent='Impression Bluetooth : '+current+' / '+total+' · '+(kind==='barcode'?'code-barres':'QR anti-perte')+' · '+(item?.item?.name||'matériel');});
+    status.textContent='Terminé : '+(labels.length*2)+' étiquettes imprimées ('+labels.length+' paires) sur '+info.name+'.';persistAll();
   }catch(err){status.textContent='Erreur d’impression : '+err.message;alert('Impression FICHERO : '+err.message+'\n\nVérifie que l’imprimante est allumée, chargée et déconnectée de l’application du téléphone.');}
   finally{button.disabled=false;}
 });
 
 function printLabelRoll(labels,type,w){
-  const html=labels.map(({item,unit})=>{
-    if(type==='owner-qr')return `<div class="label qr-label"><img src="${makeQR(unit.publicUrl)}" alt="QR propriétaire"><div class="label-copy"><b>${esc(unit.tag)}</b><small>MATÉRIEL RETROUVÉ</small></div></div>`;
-    return `<div class="label barcode-label"><img src="${Code128Barcode.dataUri(unit.barcode)}" alt="Code-barres"><b>${esc(unit.tag)}</b><small>${esc(item.name)}</small></div>`;
+  const html=labels.flatMap(({item,unit})=>{
+    const barcode=`<div class="label barcode-label"><img src="${Code128Barcode.dataUri(unit.barcode)}" alt="Code-barres"></div>`;
+    const qr=`<div class="label qr-label"><img src="${makeQR(unit.publicUrl)}" alt="QR anti-perte"><div class="label-copy"><b>${esc([item.brand,item.model].filter(Boolean).join(' ')||item.name)}</b><small>Réf. ${esc(unit.tag||unit.barcode)}</small><small>SI PERDU : SCANNER</small></div></div>`;
+    return type==='pair'?[barcode,qr]:type==='owner-qr'?[qr]:[barcode];
   }).join('');
   if(!w||w.closed)throw Error('La fenêtre d’impression a été fermée.');
-  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquettes 30 × 14 mm</title><style>
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquettes FICHERO 30 × 14 mm</title><style>
   @page{size:30mm 14mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:30mm;background:#fff;color:#000;font-family:Arial,sans-serif}
-  .label{width:30mm;height:14mm;overflow:hidden;display:flex;align-items:center;justify-content:center;break-after:page;page-break-after:always;background:#fff;padding:.45mm;gap:.5mm}
-  .label:last-child{break-after:auto;page-break-after:auto}.barcode-label{flex-direction:row;gap:0;padding:0}.barcode-label img{width:29mm;height:12.8mm;object-fit:fill;display:block}.barcode-label b,.barcode-label small{display:none}
-  .qr-label{flex-direction:row;justify-content:flex-start}.qr-label img{width:12.4mm;height:12.4mm;object-fit:contain;display:block}.label-copy{display:flex;flex-direction:column;gap:1mm;min-width:0}.label-copy b{font-size:7pt;white-space:nowrap}.label-copy small{font-size:4pt;font-weight:700;line-height:1.1}
+  .label{width:30mm;height:14mm;overflow:hidden;display:flex;align-items:center;justify-content:center;break-after:page;page-break-after:always;background:#fff;padding:.35mm;gap:.5mm}
+  .label:last-child{break-after:auto;page-break-after:auto}.barcode-label img{width:29mm;height:13.2mm;object-fit:fill;display:block}
+  .qr-label{flex-direction:row;justify-content:flex-start}.qr-label img{width:12.2mm;height:12.2mm;object-fit:contain;display:block}.label-copy{display:flex;flex-direction:column;gap:.6mm;min-width:0;overflow:hidden}.label-copy b{font-size:6.5pt;white-space:nowrap}.label-copy small{font-size:5pt;font-weight:700;line-height:1.05;white-space:nowrap}
   @media screen{body{background:#ddd}.label{margin:5mm auto;box-shadow:0 1px 5px #777}}
   </style></head><body>${html}<script>window.onload=()=>setTimeout(()=>window.print(),350)<\/script></body></html>`);w.document.close();
 }
+async function publishOwnerQrLabels(labels){
+  const cfg=getSyncConfig();
+  if(!cfg.url||!cfg.key)throw Error('Configure Supabase dans Exports & impressions avant de publier les QR anti-perte.');
+  const session=await ensureSyncSession(cfg);
+  if(!session?.access_token)throw Error('Connecte-toi au compte propriétaire dans Exports & impressions avant de publier les QR anti-perte.');
+  const base=(localStorage.getItem('caverne_portal_base')||$('#portalBaseUrl')?.value||'').trim().replace(/\/$/,'');
+  if(!/^https:\/\//i.test(base))throw Error('Renseigne et publie d’abord l’adresse GitHub Pages dans Portail clients & collègues.');
+  const rows=labels.map(({item,unit})=>{const owner=ownerById(unit.ownerId||item.ownerId);if(!owner)throw Error('Aucun propriétaire associé à « '+item.name+' ». Affecte un propriétaire à ce matériel.');return {id:unit.token,owner_id:session.user.id,tag:unit.tag,item_name:item.name,brand:item.brand||'',model:item.model||'',owner_name:owner.name,organization:owner.organization||'',phone:owner.showPhone?owner.phone||'':'',email:owner.showEmail?owner.email||'':'',updated_at:new Date().toISOString()};});
+  const url=cfg.url.replace(/\/$/,'')+'/rest/v1/caverne_public_labels?on_conflict=owner_id,tag';
+  const response=await fetch(url,{method:'POST',headers:{apikey:cfg.key,Authorization:'Bearer '+session.access_token,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
+  if(!response.ok)throw Error('Publication Supabase impossible (HTTP '+response.status+'). Vérifie que docs/ETIQUETTES-QR.sql a été exécuté.');
+  labels.forEach(({unit})=>{unit.publicUrl=base+'/contact.html?id='+encodeURIComponent(unit.token)+'&project='+encodeURIComponent(cfg.url)+'&key='+encodeURIComponent(cfg.key);});persistAll();
+}
+
 async function printSelectedOwnerQrLabels(){
   const labels=selectedLabelUnits();if(!labels.length)return alert('Sélectionne au moins un exemplaire.');
   const printWindow=window.open('','_blank');if(!printWindow)return alert('Autorise les fenêtres surgissantes pour préparer les QR.');
-  const cfg=getSyncConfig();
-  if(!cfg.url||!cfg.key){printWindow.close();return alert('Configure Supabase dans Exports & impressions avant de publier les QR anti-perte.');}
-  const session=await ensureSyncSession(cfg);
-  if(!session?.access_token){printWindow.close();return alert('Connecte-toi au compte propriétaire dans Exports & impressions avant de publier les QR anti-perte.');}
-  const base=(localStorage.getItem('caverne_portal_base')||$('#portalBaseUrl')?.value||'').trim().replace(/\/$/,'');
-  if(!/^https:\/\//i.test(base))return alert('Renseigne et publie d’abord l’adresse GitHub Pages dans Portail clients & collègues.');
-  try{
-    const rows=labels.map(({item,unit})=>{const owner=ownerById(unit.ownerId||item.ownerId);if(!owner)throw Error('Aucun propriétaire associé à « '+item.name+' ». Affecte un propriétaire à ce matériel.');return {id:unit.token,owner_id:session.user.id,tag:unit.tag,item_name:item.name,brand:item.brand||'',model:item.model||'',owner_name:owner.name,organization:owner.organization||'',phone:owner.showPhone?owner.phone||'':'',email:owner.showEmail?owner.email||'':'',updated_at:new Date().toISOString()};});
-    const url=cfg.url.replace(/\/$/,'')+'/rest/v1/caverne_public_labels?on_conflict=owner_id,tag';
-    const response=await fetch(url,{method:'POST',headers:{apikey:cfg.key,Authorization:'Bearer '+session.access_token,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
-    if(!response.ok)throw Error('Publication Supabase impossible (HTTP '+response.status+'). Vérifie que docs/ETIQUETTES-QR.sql a été exécuté.');
-    labels.forEach(({unit})=>{unit.publicUrl=base+'/contact.html?id='+encodeURIComponent(unit.token)+'&project='+encodeURIComponent(cfg.url)+'&key='+encodeURIComponent(cfg.key);});persistAll();
-    printLabelRoll(labels,'owner-qr',printWindow);$('#labelsDialog').close();
-  }catch(err){if(!printWindow.closed)printWindow.close();alert('QR anti-perte : '+err.message);}
+  try{await publishOwnerQrLabels(labels);printLabelRoll(labels,'owner-qr',printWindow);$('#labelsDialog').close();}
+  catch(err){if(!printWindow.closed)printWindow.close();alert('QR anti-perte : '+err.message);}
 }
 $('#printOwnerQrLabels')?.addEventListener('click',printSelectedOwnerQrLabels);
 
