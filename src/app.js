@@ -64,7 +64,7 @@ const idb = {
     // Migration additive : mémorise les identifiants créés pour les anciens enregistrements,
     // sans modifier l'horodatage de synchronisation ni écraser une version cloud plus récente.
     await idb.set('state',{...st,items,kits,travel,loans,movements,owners});
-  } catch (e) { alert("Le stockage de l'appareil est indisponible (Navigation privée ?). Les données ne seront pas conservées."); }
+  } catch (e) { console.error('Démarrage / stockage', e); alert("Le stockage de l'appareil est indisponible (Navigation privée ?). Les données ne seront pas conservées.\n\nDétail technique : " + (e?.name || 'Erreur') + ' — ' + (e?.message || e?.target?.error?.message || 'inconnu')); }
   window.__bootTrace = [];
   window.__bootTrace.push('start');
   try { render(); window.__bootTrace.push('render-done'); } catch (e) { window.__bootTrace.push('render-ERR:' + e.message); }
