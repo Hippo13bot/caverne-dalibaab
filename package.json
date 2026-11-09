@@ -1,7 +1,7 @@
 {
   "name": "caverne-dalibaab",
-  "version": "1.8.3",
-  "description": "Gestion de parc matériel avec étiquettes FICHERO simplifiées et codes faciles à scanner",
+  "version": "1.9.0",
+  "description": "Gestion de parc matériel avec identifiants EAN-13 internes et étiquettes QR anti-perte",
   "main": "src/main.js",
   "author": "La caverne d'Alibaab",
   "license": "MIT",
@@ -10,7 +10,8 @@
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac --publish never",
     "dist:win": "electron-builder --win --publish never",
-    "dist:all": "electron-builder --mac --win --publish never"
+    "dist:all": "electron-builder --mac --win --publish never",
+    "test": "node tests/ean13.test.js && node tests/qr.test.js"
   },
   "devDependencies": {
     "electron": "^34.3.0",

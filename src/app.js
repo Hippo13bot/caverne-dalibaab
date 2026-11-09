@@ -102,7 +102,7 @@ function renderInventory(){
   $('#categoryFilter').value=cats.includes(cf)?cf:'all';
   const filtered=items.filter(x=>matchesStatus(x,sf)&&(cf==='all'||x.category===cf)&&[x.name,x.brand,x.model,x.serial,x.category,x.location,x.holder,...(x.units||[]).flatMap(u=>[u.tag,u.barcode])].join(' ').toLowerCase().includes(q));
   $('#count').textContent=`${filtered.length} référence(s) · ${filtered.reduce((n,x)=>n+Math.max(1,Number(x.quantity)||1),0)} unité(s)`;
-  $('#inventory').innerHTML=filtered.length?filtered.map(x=>`<article class="item-card">${x.photo?`<img src="${x.photo}" alt="">`:''}<div class="item-meta"><span class="pill">${esc(x.category)}</span><span class="pill ${esc(displayStatus(x)==='partial'?'loaned':displayStatus(x))}">${statusNames[displayStatus(x)]}</span></div><h3>${esc(x.name)}</h3><p>${esc([x.brand,x.model].filter(Boolean).join(' · ')||'Modèle non renseigné')}<br>Quantité totale : ${Math.max(1,Number(x.quantity)||1)}${x.stockQty!=null||x.loanedQty!=null?`<br>En stock : ${Number(x.stockQty)||0} · Sorti : ${Number(x.loanedQty)||0}`:''}<br>${x.serial?'N° série : '+esc(x.serial):'Sans numéro de série'}<br>${x.location?'Emplacement : '+esc(x.location):'Emplacement non renseigné'}${x.holder?'<br>Avec : '+esc(x.holder):''}${x.dueDate?'<br>Retour prévu : '+esc(x.dueDate):''}${x.status==='unavailable'&&x.reason?'<br>'+reasonNames[x.reason]:''}</p><div class="card-actions"><button class="btn subtle" data-edit="${x.id}">Modifier</button><button class="btn subtle" data-barcode="${x.id}">Code-barres</button><button class="btn subtle" data-label-item="${x.id}">Étiquettes</button><button class="btn subtle" data-print="${x.id}">Fiche PDF</button><button class="btn subtle" data-printloan="${x.id}">Fiche location</button><button class="btn subtle" data-delete="${x.id}">Supprimer</button></div></article>`).join(''):'<div class="empty">Aucun équipement correspondant. Ajoute ton matériel.</div>';
+  $('#inventory').innerHTML=filtered.length?filtered.map(x=>`<article class="item-card">${x.photo?`<img src="${x.photo}" alt="">`:''}<div class="item-meta"><span class="pill">${esc(x.category)}</span><span class="pill ${esc(displayStatus(x)==='partial'?'loaned':displayStatus(x))}">${statusNames[displayStatus(x)]}</span></div><h3>${esc(x.name)}</h3><p>${esc([x.brand,x.model].filter(Boolean).join(' · ')||'Modèle non renseigné')}<br>Quantité totale : ${Math.max(1,Number(x.quantity)||1)}${x.stockQty!=null||x.loanedQty!=null?`<br>En stock : ${Number(x.stockQty)||0} · Sorti : ${Number(x.loanedQty)||0}`:''}<br>${x.serial?'N° série : '+esc(x.serial):'Sans numéro de série'}<br>${x.location?'Emplacement : '+esc(x.location):'Emplacement non renseigné'}${x.holder?'<br>Avec : '+esc(x.holder):''}${x.dueDate?'<br>Retour prévu : '+esc(x.dueDate):''}${x.status==='unavailable'&&x.reason?'<br>'+reasonNames[x.reason]:''}</p><div class="card-actions"><button class="btn subtle" data-edit="${x.id}">Modifier</button><button class="btn subtle" data-barcode="${x.id}">EAN-13</button><button class="btn subtle" data-label-item="${x.id}">Étiquettes</button><button class="btn subtle" data-print="${x.id}">Fiche PDF</button><button class="btn subtle" data-printloan="${x.id}">Fiche location</button><button class="btn subtle" data-delete="${x.id}">Supprimer</button></div></article>`).join(''):'<div class="empty">Aucun équipement correspondant. Ajoute ton matériel.</div>';
 }
 function kitEntries(kit){const grouped=new Map();(kit.items||[]).forEach(entry=>{const itemId=typeof entry==='string'?entry:(entry.itemId||entry.id);if(!itemId)return;const qty=typeof entry==='string'?1:Math.max(1,Number(entry.qty)||1);grouped.set(itemId,(grouped.get(itemId)||0)+qty);});return [...grouped].map(([itemId,qty])=>({itemId,qty}));}
 
@@ -162,7 +162,7 @@ function initLoanForm(){
   $('#loanForm').onsubmit=e=>{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); d.items=[]; const rows=$('#loanRows').querySelectorAll('.loan-row'); rows.forEach(r=>{ const itemId=r.dataset.itemId||''; const obj=items.find(x=>x.id===itemId); const name=r.querySelector('.loan-name').value.trim(); if(name){ { const prior=(loans.find(x=>x.id===editingLoanId)?.items||[]).find(it=>it.itemId===itemId); d.items.push({ itemId, name:obj?.name||name, brand:obj?.brand||'', model:obj?.model||'', qty:Math.max(1,Number(r.querySelector('.loan-qty').value)||1), status:prior?.status||'assigned', departedQty:prior?.departedQty||0, returnedQty:prior?.returnedQty||0 }); } } });
   const old=loans.find(x=>x.id===editingLoanId);if(old){(old.items||[]).forEach(prior=>{const stillThere=d.items.find(it=>it.itemId===prior.itemId);if(Number(prior.departedQty||0)>Number(prior.returnedQty||0)&&!stillThere)d.items.push(prior);else if(stillThere)stillThere.qty=Math.max(Number(stillThere.qty)||1,Number(prior.departedQty)||0);});}d.id=editingLoanId||uid(); d.status=old?.status||'draft'; d.createdAt=old?.createdAt||new Date().toISOString(); loans=old?loans.map(x=>x.id===d.id?{...old,...d}:x):[...loans,d]; editingLoanId=null; saveAll(); $('#loanDialog').close(); renderLoans(); };
   $('#itemForm').onsubmit=e=>{
-    try{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); if(photoData) d.photo=photoData; const id=editingId||uid(); const old=items.find(x=>x.id===id); d.id=id; d.status=d.status||'stock'; d.ownerId=Object.prototype.hasOwnProperty.call(d,'ownerId')?d.ownerId:(old?.ownerId||''); if(old&&(old.stockQty!=null||old.loanedQty!=null||old.unavailableQty!=null)){const total=Math.max(1,Number(d.quantity)||1);d.loanedQty=Number(old.loanedQty)||0;d.unavailableQty=Number(old.unavailableQty)||0;if(total<d.loanedQty+d.unavailableQty)throw Error(`La quantité totale ne peut pas être inférieure aux unités déjà sorties ou indisponibles (${d.loanedQty+d.unavailableQty}).`);d.stockQty=total-d.loanedQty-d.unavailableQty;d.quantity=total;d.status=d.loanedQty>0?'loaned':d.stockQty>0?'stock':'unavailable';} if(!d.externalQr&&old?.externalQr)d.externalQr=old.externalQr; if(!d.photo&&old?.photo)d.photo=old.photo; items=old?items.map(x=>x.id===id?{...x,...d}:x):[...items,d]; if(old&&old.ownerId!==d.ownerId)(items.find(x=>x.id===id).units||[]).forEach(u=>u.ownerId=d.ownerId||''); ensureItemUnits(items.find(x=>x.id===id)); editingId=null; photoData=''; saveAll(); $('#itemDialog').close(); render(); refreshLoanOptions(); }
+    try{ e.preventDefault(); const d=Object.fromEntries(new FormData(e.currentTarget).entries()); if(photoData) d.photo=photoData; const id=editingId||uid(); const old=items.find(x=>x.id===id); d.id=id; d.status=d.status||'stock'; d.ownerId=Object.prototype.hasOwnProperty.call(d,'ownerId')?d.ownerId:(old?.ownerId||''); if(old&&(old.stockQty!=null||old.loanedQty!=null||old.unavailableQty!=null)){const total=Math.max(1,Number(d.quantity)||1);d.loanedQty=Number(old.loanedQty)||0;d.unavailableQty=Number(old.unavailableQty)||0;if(total<d.loanedQty+d.unavailableQty)throw Error(`La quantité totale ne peut pas être inférieure aux unités déjà sorties ou indisponibles (${d.loanedQty+d.unavailableQty}).`);d.stockQty=total-d.loanedQty-d.unavailableQty;d.quantity=total;d.status=d.loanedQty>0?'loaned':d.stockQty>0?'stock':'unavailable';} if(!d.externalQr&&old?.externalQr)d.externalQr=old.externalQr; if(!d.photo&&old?.photo)d.photo=old.photo; items=old?items.map(x=>x.id===id?{...x,...d}:x):[...items,d]; if(old&&old.ownerId!==d.ownerId)(items.find(x=>x.id===id).units||[]).forEach(u=>u.ownerId=d.ownerId||''); const savedItem=items.find(x=>x.id===id);ensureItemUnits(savedItem);editingId=null;photoData='';saveAll();if(savedItem.units?.length)publishOwnerQrLabels(savedItem.units.map(unit=>({item:savedItem,unit}))).catch(()=>{});$('#itemDialog').close();render();refreshLoanOptions(); }
     catch(err){ console.error('itemForm submit ERR',err); alert('Impossible d’enregistrer cette fiche : '+err.message); }
   };
   $('#closeItem').onclick=$('#cancelItem').onclick=()=>{editingId=null;$('#itemDialog').close();}; $('#itemDialog').addEventListener('close',()=>{editingId=null;});
@@ -200,7 +200,24 @@ function publicToken(){return crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xx
 function renderOwnerSelect(){const el=$('#itemOwner');if(!el)return;const current=$('#itemForm')?.elements.ownerId?.value||'';el.innerHTML='<option value="">Propriétaire non renseigné</option>'+owners.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}${o.organization?' · '+esc(o.organization):''}</option>`).join('');el.value=current;}
 function tagPrefix(item){const c=String(item.category||'MAT').toUpperCase();const words=c.normalize('NFD').replace(/[\u0300-\u036f]/g,'').match(/[A-Z0-9]+/g)||['MAT'];return words.map(w=>w[0]).join('').slice(0,3)||'MAT';}
 function newUnitTag(item){const used=new Set(items.flatMap(x=>(x.units||[]).map(u=>u.tag)));let tag;do{tag='#'+tagPrefix(item)+'-'+Math.random().toString(36).slice(2,7).toUpperCase();}while(used.has(tag));return tag;}
-function ensureItemUnits(item){const qty=Math.max(1,Number(item.quantity)||1);if(!Array.isArray(item.units))item.units=[];while(item.units.length<qty){const token=publicToken();item.units.push({id:token,token,tag:newUnitTag(item)});}if(item.units.length>qty)item.units=item.units.slice(0,qty);item.units.forEach(u=>{if(!u.token)u.token=u.id||uid();if(!u.id)u.id=u.token;if(!u.tag)u.tag=newUnitTag(item);if(u.ownerId===undefined)u.ownerId=item.ownerId||'';if(!u.barcode)u.barcode='CA-'+String(u.tag).replace(/^#/,'');});return item.units;}
+function newPublicCode(){const alphabet='23456789ABCDEFGHJKLMNPQRSTUVWXYZ';const used=new Set(items.flatMap(x=>(x.units||[]).map(u=>u.publicCode).filter(Boolean)));for(let n=0;n<10000;n++){const bytes=new Uint8Array(8);crypto.getRandomValues(bytes);const code=[...bytes].map(v=>alphabet[v%alphabet.length]).join('');if(!used.has(code))return code;}throw new Error('Impossible de générer une référence publique courte.');}
+function ensureItemUnits(item){
+  const qty=Math.max(1,Number(item.quantity)||1);if(!Array.isArray(item.units))item.units=[];
+  while(item.units.length<qty){const token=publicToken();item.units.push({id:token,token,tag:newUnitTag(item)});}
+  if(item.units.length>qty)item.units=item.units.slice(0,qty);
+  const usedEans=new Set(items.filter(x=>x!==item).flatMap(x=>(x.units||[]).map(u=>u.ean13).filter(v=>EAN13Barcode.valid(v))));
+  const usedPublicCodes=new Set(items.filter(x=>x!==item).flatMap(x=>(x.units||[]).map(u=>u.publicCode).filter(Boolean)));
+  item.units.forEach(u=>{
+    if(!u.token)u.token=u.id||uid();if(!u.id)u.id=u.token;if(!u.tag)u.tag=newUnitTag(item);if(u.ownerId===undefined)u.ownerId=item.ownerId||'';
+    // Migration additive : l'ancien Code 128 reste dans barcode et continue d'être reconnu.
+    if(!u.ean13&&EAN13Barcode.valid(u.barcode))u.ean13=u.barcode;
+    if(!EAN13Barcode.valid(u.ean13)||usedEans.has(u.ean13))u.ean13=EAN13Barcode.generate(usedEans);
+    usedEans.add(u.ean13);
+    if(!u.publicCode||usedPublicCodes.has(u.publicCode))u.publicCode=newPublicCode();
+    usedPublicCodes.add(u.publicCode);
+    if(!u.barcode)u.barcode='CA-'+String(u.tag).replace(/^#/,'');
+  });return item.units;
+}
 function ensureKitBarcode(kit){if(!kit.barcode)kit.barcode='CA-KIT-'+String(kit.id||uid()).replace(/[^a-z0-9]/gi,'').slice(-10).toUpperCase();return kit.barcode;}
 function ensureTravelBarcode(entry){if(!entry.barcode)entry.barcode='CA-TRV-'+String(entry.id||uid()).replace(/[^a-z0-9]/gi,'').slice(-10).toUpperCase();return entry.barcode;}
 let editingOwnerId=null;
@@ -214,7 +231,7 @@ async function openLabels(prefillId=''){
   const list=$('#labelSelection');if(!list)return;
   items.forEach(ensureItemUnits);persistAll();
   const all=[];items.forEach(item=>ensureItemUnits(item).forEach((unit,index)=>all.push({item,unit,index})));
-  list.innerHTML=all.length?all.map(({item,unit,index})=>`<div class="label-choice"><input type="checkbox" value="${esc(item.id)}::${esc(unit.token)}" ${prefillId===item.id?'checked':''}><span><b>${esc(item.name)}</b><small>${esc(unit.tag)} · ${esc(unit.barcode)} · exemplaire ${index+1}/${item.units.length}</small></span></div>`).join(''):'<p class="muted">Aucun matériel à étiqueter.</p>';
+  list.innerHTML=all.length?all.map(({item,unit,index})=>`<div class="label-choice"><input type="checkbox" value="${esc(item.id)}::${esc(unit.token)}" ${prefillId===item.id?'checked':''}><span><b>${esc(item.name)}</b><small>${esc(unit.tag)} · EAN ${esc(unit.ean13||'à attribuer')} · exemplaire ${index+1}/${item.units.length}</small></span></div>`).join(''):'<p class="muted">Aucun matériel à étiqueter.</p>';
   if(!prefillId)list.querySelectorAll('input[type=checkbox]').forEach(x=>x.checked=false);
   $('#labelsDialog').showModal();
 }
@@ -223,10 +240,9 @@ $('#labelSelectAll')?.addEventListener('click',()=>$('#labelSelection').querySel
 $('#labelSelectNone')?.addEventListener('click',()=>$('#labelSelection').querySelectorAll('input[type=checkbox]').forEach(x=>x.checked=false));
 $('#closeLabels')?.addEventListener('click',()=>$('#labelsDialog').close());$('#closeLabels2')?.addEventListener('click',()=>$('#labelsDialog').close());
 function selectedLabelUnits(){
-  const selected=[...$('#labelSelection').querySelectorAll('input:checked')];
-  const labels=[];
-  for(const checkbox of selected){const [itemId,token]=checkbox.value.split('::');const item=items.find(x=>x.id===itemId),unit=item?.units?.find(x=>x.token===token);if(item&&unit){if(unit.barcode&&unit.barcode!==String(unit.tag||'').replace(/^#/,''))unit.legacyBarcode=unit.barcode;unit.barcode=String(unit.tag||'').replace(/^#/,'').replace(/[^A-Z0-9-]/gi,'').slice(0,12);labels.push({item,unit});}}
-  return labels;
+  const selected=[...$('#labelSelection').querySelectorAll('input:checked')];const labels=[];
+  for(const checkbox of selected){const [itemId,token]=checkbox.value.split('::');const item=items.find(x=>x.id===itemId),unit=item?.units?.find(x=>x.token===token);if(item&&unit){if(!EAN13Barcode.valid(unit.ean13))unit.ean13=EAN13Barcode.generate(new Set(items.flatMap(x=>(x.units||[]).map(u=>u.ean13).filter(v=>EAN13Barcode.valid(v)))));if(!unit.publicCode)unit.publicCode=newPublicCode();labels.push({item,unit});}}
+  persistAll();return labels;
 }
 async function publishOwnerQrLabels(labels){
   const cfg=getSyncConfig();
@@ -238,12 +254,13 @@ async function publishOwnerQrLabels(labels){
   const rows=labels.map(({item,unit})=>{
     const owner=ownerById(unit.ownerId||item.ownerId);
     if(!owner)throw Error('Aucun propriétaire associé à « '+item.name+' ». Affecte un propriétaire à ce matériel.');
-    return {id:unit.token,owner_id:session.user.id,tag:unit.tag,item_name:item.name,brand:item.brand||'',model:item.model||'',owner_name:owner.name,organization:owner.organization||'',phone:owner.showPhone?owner.phone||'':'',email:owner.showEmail?owner.email||'':'',updated_at:new Date().toISOString()};
+    return {id:unit.token,public_code:unit.publicCode,ean13:unit.ean13,owner_id:session.user.id,tag:unit.tag,item_name:item.name,brand:item.brand||'',model:item.model||'',owner_name:owner.name,organization:owner.organization||'',phone:owner.showPhone?owner.phone||'':'',email:owner.showEmail?owner.email||'':'',updated_at:new Date().toISOString()};
   });
   const url=cfg.url.replace(/\/$/,'')+'/rest/v1/caverne_public_labels?on_conflict=owner_id,tag';
   const response=await fetch(url,{method:'POST',headers:{apikey:cfg.key,Authorization:'Bearer '+session.access_token,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
   if(!response.ok)throw Error('Publication Supabase impossible (HTTP '+response.status+'). Vérifie que docs/ETIQUETTES-QR.sql a été exécuté.');
-  labels.forEach(({unit})=>{unit.publicUrl=base+'/contact.html?id='+encodeURIComponent(unit.token)+'&project='+encodeURIComponent(cfg.url)+'&key='+encodeURIComponent(cfg.key);});
+  const publicCfg=window.CAVERNE_PUBLIC_CONFIG||{};const compact=String(publicCfg.supabaseUrl||'').replace(/\/$/,'')===cfg.url.replace(/\/$/,'')&&String(publicCfg.supabaseAnonKey||'')===cfg.key;
+  labels.forEach(({unit})=>{unit.publicUrl=compact?base+'/contact.html?i='+encodeURIComponent(unit.publicCode):base+'/contact.html?id='+encodeURIComponent(unit.token)+'&project='+encodeURIComponent(cfg.url)+'&key='+encodeURIComponent(cfg.key);});
   persistAll(); return labels;
 }
 async function printSelectedBarcodeLabels(){
@@ -271,8 +288,8 @@ $('#printDirectFichero')?.addEventListener('click',async()=>{
 });
 function printLabelRoll(labels,type,w){
   const html=labels.map(({item,unit})=>{
-    const barcode=`<div class="label barcode-label"><img src="${Code128Barcode.dataUri(unit.barcode)}" alt="Code-barres"></div>`;
-    const qr=`<div class="label qr-label"><img src="${makeQR(unit.publicUrl)}" alt="QR anti-perte"><div class="label-copy"><b>${esc(item.name||'MATÉRIEL')}</b><small>Réf. ${esc(unit.tag)}</small></div></div>`;
+    const barcode=`<div class="label barcode-label"><img src="${EAN13Barcode.dataUri(unit.ean13)}" alt="Code-barres"></div>`;
+    const qr=`<div class="label qr-label"><img src="${makeQR(unit.publicUrl)}" alt="QR anti-perte"><div class="label-copy"><b>${esc(item.name||'MATÉRIEL')}</b><small>Réf. ${esc(unit.tag)}</small><strong>SCANNEZ SI PERDU</strong></div></div>`;
     if(type==='pair')return barcode+qr;
     if(type==='owner-qr')return qr; return barcode;
   }).join('');
@@ -281,7 +298,7 @@ function printLabelRoll(labels,type,w){
   @page{size:30mm 14mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:30mm;background:#fff;color:#000;font-family:Arial,sans-serif}
   .label{width:30mm;height:14mm;overflow:hidden;display:flex;align-items:center;justify-content:center;break-after:page;page-break-after:always;background:#fff;padding:.45mm;gap:.5mm}
   .label:last-child{break-after:auto;page-break-after:auto}.barcode-label{padding:1mm 2mm;justify-content:center;align-items:center}.barcode-label img{display:block;width:25mm;height:10mm;max-width:25mm;max-height:10mm;object-fit:contain;object-position:center;margin:auto}
-  .qr-label{flex-direction:row;justify-content:center;gap:1.2mm;padding:.5mm}.qr-label img{width:13mm;height:13mm;flex:0 0 13mm;object-fit:contain;display:block}.label-copy{display:flex;flex-direction:column;justify-content:center;gap:1mm;width:14.5mm;min-width:0;overflow:hidden}.label-copy b{font-size:6.2pt;line-height:1.05;white-space:normal;overflow-wrap:anywhere;max-height:6mm}.label-copy small{font-size:5pt;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qr-label{flex-direction:row;justify-content:center;gap:1.2mm;padding:.5mm}.qr-label img{width:13mm;height:13mm;flex:0 0 13mm;object-fit:contain;display:block}.label-copy{display:flex;flex-direction:column;justify-content:center;gap:1mm;width:14.5mm;min-width:0;overflow:hidden}.label-copy b{font-size:6.2pt;line-height:1.05;white-space:normal;overflow-wrap:anywhere;max-height:6mm}.label-copy small{font-size:5pt;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.label-copy strong{font-size:5.1pt;line-height:1.05;white-space:nowrap;letter-spacing:.05mm}
   @media screen{body{background:#ddd}.label{margin:5mm auto;box-shadow:0 1px 5px #777}}
   </style></head><body>${html}<script>window.onload=()=>setTimeout(()=>window.print(),350)<\/script></body></html>`);w.document.close();
 }
@@ -294,14 +311,14 @@ async function printSelectedOwnerQrLabels(){
 $('#printOwnerQrLabels')?.addEventListener('click',printSelectedOwnerQrLabels);
 
 function qrLink(id){ return String(id); }
-function makeQR(value){ const qr=new QRCodeLib(0,0); qr.addData(String(value)); qr.make(); const count=qr.getModuleCount(), scale=10, margin=4, canvas=document.createElement('canvas'); canvas.width=canvas.height=(count+margin*2)*scale; const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#111';for(let r=0;r<count;r++)for(let c=0;c<count;c++)if(qr.isDark(r,c))ctx.fillRect((c+margin)*scale,(r+margin)*scale,scale,scale);return canvas.toDataURL('image/png'); }
+function makeQR(value){ const qr=new QRCodeLib(0,0); qr.addData(String(value)); qr.make(); const count=qr.getModuleCount();if((count+8)*2>96)throw new Error('QR trop dense pour le rouleau 30 × 14 mm ('+count+' modules). Configure src/public-config.js avec ton projet Supabase et republie GitHub Pages pour utiliser une URL courte.');const scale=10, margin=4, canvas=document.createElement('canvas'); canvas.width=canvas.height=(count+margin*2)*scale; const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#111';for(let r=0;r<count;r++)for(let c=0;c<count;c++)if(qr.isDark(r,c))ctx.fillRect((c+margin)*scale,(r+margin)*scale,scale,scale);return canvas.toDataURL('image/png'); }
 
 // Attach form open/close to public buttons
 document.addEventListener('click', async (e)=>{
   const edit=e.target.closest('[data-edit]'); if(edit){ openEdit(edit.dataset.edit); return; }
   const del=e.target.closest('[data-delete]'); if(del){ if(confirm('Supprimer définitivement cette fiche ?')){ items=items.filter(x=>x.id!==del.dataset.delete); kits=kits.map(k=>({...k,items:(k.items||[]).filter(entry=>(typeof entry==='string'?entry:(entry.itemId||entry.id))!==del.dataset.delete)})); saveAll(); } return; }
   const labelItem=e.target.closest('[data-label-item]');if(labelItem){openLabels(labelItem.dataset.labelItem);return;}
-  const barcode=e.target.closest('[data-barcode]'); if(barcode){ const x=items.find(i=>i.id===barcode.dataset.barcode); if(x){ensureItemUnits(x);const unit=x.units[0];$('#qrTitle').textContent=x.name+' · '+unit.tag;$('#printQRBtn').textContent='Imprimer le code-barres';$('#qrImage').src=Code128Barcode.dataUri(unit.barcode);$('#qrImage').alt='Code-barres '+unit.barcode;$('#qrDialog').showModal();} return; }
+  const barcode=e.target.closest('[data-barcode]'); if(barcode){ const x=items.find(i=>i.id===barcode.dataset.barcode); if(x){ensureItemUnits(x);const unit=x.units[0];$('#qrTitle').textContent=x.name+' · '+unit.tag;$('#printQRBtn').textContent='Imprimer l’EAN-13';$('#qrImage').src=EAN13Barcode.dataUri(unit.ean13);$('#qrImage').alt='Code-barres '+unit.barcode;$('#qrDialog').showModal();} return; }
   const pr=e.target.closest('[data-print]'); if(pr){ const x=items.find(i=>i.id===pr.dataset.print); printItems([x],true); return; }
   const prl=e.target.closest('[data-printloan]'); if(prl){ const l=loans.find(x=>x.id===prl.dataset.printloan); if(l) printLoan(l); return; }
   const ke=e.target.closest('[data-kit-edit]');if(ke){const k=kits.find(x=>x.id===ke.dataset.kitEdit);if(k){editingKitId=k.id;$('#kitDialogTitle').textContent='Modifier le kit';$('#kitForm').reset();$('#kitRows').innerHTML='';$('#kitForm').elements.name.value=k.name||'';$('#kitForm').elements.location.value=k.location||'';$('#kitForm').elements.description.value=k.description||'';kitEntries(k).forEach(entry=>{addKitItemRow();const row=$('#kitRows').lastElementChild;row.querySelector('.kit-item-select').value=entry.itemId;row.querySelector('.kit-item-qty').value=entry.qty;});if(!kitEntries(k).length)addKitItemRow();$('#kitDialog').showModal();}return;}
@@ -464,7 +481,7 @@ async function startScanner(){
   if(scannerActive)return;
   $('#scanContainer').hidden=false; $('#scanError').hidden=true;
   try{
-    scanner=new Html5Qrcode('scanContainer',{formatsToSupport:[Html5QrcodeSupportedFormats.CODE_128,Html5QrcodeSupportedFormats.QR_CODE]});
+    scanner=new Html5Qrcode('scanContainer',{formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13,Html5QrcodeSupportedFormats.CODE_128,Html5QrcodeSupportedFormats.QR_CODE]});
     await scanner.start({facingMode:'environment'},{fps:18,qrbox:(w,h)=>({width:Math.min(520,w-24),height:Math.min(190,h-24)}),aspectRatio:1.8, videoConstraints:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}},onScanSuccess,()=>{});
     scannerActive=true; $('#scanToggle').textContent='Arrêter la caméra'; $('#scanStatus').textContent='Caméra prête.';
   }catch(err){ scanner=null; $('#scanError').textContent='Impossible de lancer la caméra. Sur iPhone, ouvre l’app depuis Safari ou l’écran d’accueil et autorise l’accès à la caméra. '+(err?.message||''); $('#scanError').hidden=false; }
@@ -477,17 +494,16 @@ function findItemByScannedCode(value){
   const code=String(value||'').trim();
   // Les étiquettes publiques contiennent une URL contact.html?id=TOKEN&project=…&key=… .
   // Dans l'application, on extrait le jeton de l'exemplaire pour retrouver sa fiche locale.
-  let publicLabelId='';
+  let publicLabelId='',publicCode='';
   try{
     const url=new URL(code);
-    if(/(?:^|\/)contact\.html$/i.test(url.pathname)&&url.searchParams.has('project')&&url.searchParams.has('key')){
-      publicLabelId=url.searchParams.get('id')||'';
-    }
+    if(/(?:^|\/)contact\.html$/i.test(url.pathname)){publicLabelId=url.searchParams.get('id')||'';publicCode=url.searchParams.get('i')||'';}
   }catch(e){}
   return items.find(x=>
     x.id===parseItemFromScannedText(code)||
     (publicLabelId&&Array.isArray(x.units)&&x.units.some(unit=>unit.token===publicLabelId||unit.id===publicLabelId))||
-    x.qrCode===code||x.serial===code||x.barcode===code||x.externalQr===code||(x.units||[]).some(unit=>unit.barcode===code||unit.legacyBarcode===code||unit.tag===code||unit.token===code||unit.id===code)
+    (publicCode&&Array.isArray(x.units)&&x.units.some(unit=>unit.publicCode===publicCode))||
+    x.qrCode===code||x.serial===code||x.barcode===code||x.externalQr===code||(x.units||[]).some(unit=>unit.ean13===code||unit.barcode===code||unit.legacyBarcode===code||unit.tag===code||unit.token===code||unit.id===code||unit.publicCode===code)
   );
 }
 async function unlockScanFeedback(){

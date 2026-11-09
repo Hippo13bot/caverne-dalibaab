@@ -9,6 +9,25 @@
 </style>
 </head>
 <body><main class="card"><div class="brand">LA CAVERNE D’ALIBAAB</div><div id="content"><p class="muted">Chargement de la fiche…</p></div><div class="footer">Fiche publique d’identification du matériel</div></main>
+<script src="public-config.js"></script>
 <script>
-(()=>{const q=new URLSearchParams(location.search),id=q.get('id'),project=q.get('project'),key=q.get('key'),box=document.getElementById('content');const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));if(!id||!project||!key||!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(project)){box.innerHTML='<p class="error">Lien incomplet ou invalide. Demande une nouvelle étiquette au propriétaire du matériel.</p>';return;}fetch(project.replace(/\/$/,'')+'/rest/v1/caverne_public_labels?id=eq.'+encodeURIComponent(id)+'&select=tag,item_name,brand,model,owner_name,organization,phone,email',{headers:{apikey:key,Accept:'application/json'}}).then(async r=>{if(!r.ok)throw Error('Fiche indisponible');return r.json()}).then(rows=>{const x=rows[0];if(!x)throw Error('Cette étiquette n’est pas publiée ou n’existe plus.');box.innerHTML=`<div class="eyebrow">IDENTIFIANT DU MATÉRIEL</div><div class="tag">${esc(x.tag)}</div><h1 class="item">${esc(x.item_name)}</h1><p class="muted">${esc([x.brand,x.model].filter(Boolean).join(' · '))}</p><section class="owner"><div class="eyebrow">PROPRIÉTAIRE</div><h2>${esc(x.owner_name||'Propriétaire non renseigné')}</h2><p class="muted">${esc(x.organization||'')}</p><div class="contact">${x.phone?`<a href="tel:${encodeURIComponent(x.phone)}">Appeler le propriétaire</a>`:''}${x.email?`<a class="secondary" href="mailto:${encodeURIComponent(x.email)}">Envoyer un e-mail</a>`:''}${!x.phone&&!x.email?'<p class="muted">Aucun moyen de contact public n’a été renseigné.</p>':''}</div></section>`}).catch(e=>{box.innerHTML='<p class="error">'+esc(e.message)+'</p><p class="muted">Vérifie ta connexion Internet ou demande au propriétaire de republier cette étiquette.</p>'})})();
+(()=>{
+  const q=new URLSearchParams(location.search),short=q.get('i'),id=q.get('id');
+  const cfg=window.CAVERNE_PUBLIC_CONFIG||{};
+  const project=(q.get('project')||cfg.supabaseUrl||'').replace(/\/$/,'');
+  const key=q.get('key')||cfg.supabaseAnonKey||'';
+  const box=document.getElementById('content');
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  if(!(short||id)||!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(project)||!key){
+    box.innerHTML='<p class="error">Lien incomplet ou configuration publique absente. Le propriétaire doit renseigner src/public-config.js, publier GitHub Pages et republier cette étiquette.</p>';return;
+  }
+  const filter=short?'public_code=eq.'+encodeURIComponent(short):'id=eq.'+encodeURIComponent(id);
+  fetch(project+'/rest/v1/caverne_public_labels?'+filter+'&select=tag,item_name,owner_name,organization,phone,email',{headers:{apikey:key,Accept:'application/json'}})
+    .then(async r=>{if(!r.ok)throw Error('Fiche indisponible');return r.json()})
+    .then(rows=>{
+      const x=rows[0];if(!x)throw Error('Cette étiquette n’est pas publiée ou n’existe plus.');
+      box.innerHTML=`<div class="eyebrow">IDENTIFIANT DU MATÉRIEL</div><div class="tag">${esc(x.tag)}</div><h1 class="item">${esc(x.item_name)}</h1><section class="owner"><div class="eyebrow">PROPRIÉTAIRE</div><h2>${esc(x.owner_name||'Propriétaire non renseigné')}</h2><p class="muted">${esc(x.organization||'')}</p><div class="contact">${x.phone?`<a href="tel:${encodeURIComponent(x.phone)}">Appeler le propriétaire</a>`:''}${x.email?`<a class="secondary" href="mailto:${encodeURIComponent(x.email)}">Envoyer un e-mail</a>`:''}${!x.phone&&!x.email?'<p class="muted">Aucun moyen de contact public n’a été renseigné.</p>':''}</div></section>`;
+    })
+    .catch(e=>{box.innerHTML='<p class="error">'+esc(e.message)+'</p><p class="muted">Vérifie ta connexion Internet ou demande au propriétaire de republier cette étiquette.</p>';});
+})();
 </script></body></html>

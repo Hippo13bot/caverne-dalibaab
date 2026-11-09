@@ -3,19 +3,21 @@
 Inventaire de matériel audiovisuel, photo, son, informatique et accessoires. Un seul code pour l'application Mac/Windows et la PWA iPhone/iPad.
 
 ## Fonctionnalités
+- Étiquettes d’exemplaires en EAN-13 interne (préfixe 20–29, non commercial GS1) et QR anti-perte à référence courte ; impression en paire sur FICHERO D11s.
+- Scanner caméra compatible EAN-13, Code 128 historique et QR. Les anciens codes et liens publics restent reconnus.
 - Inventaire avec fiches, photos, catégories, numéros de série, quantités, statuts, garanties, emplacement et notes.
 - Sacs et kits avec code-barres Code 128 dédié, contrôle détaillé ligne par ligne, quantités par équipement et fiche PDF par contenant.
 - Scanner avec confirmation sonore (après activation par le bouton caméra), vibration si le navigateur et le téléphone la prennent en charge, anti-double-scan et compteur par unité.
-- Codes-barres Code 128 uniques par exemplaire et par kit ; les anciens QR restent reconnus pendant la transition.
+- EAN-13 uniques par exemplaire ; Code 128 conservés pour les kits/scénarios et compatibilité avec les anciennes étiquettes.
 - Scanners caméra ou lecteur USB/Bluetooth en mode clavier, avec trois modes : **SCAN**, **DÉPART** et **RETOUR**. Les QR fabricant / garantie peuvent être associés aux fiches et réutilisés.
 - Départs validés par scan, changement d'état des équipements, historique des mouvements et bordereau PDF avec coordonnées du bénéficiaire et dates.
 - Locations avec client, prénom, contact, dates, matériel sélectionné, quantités sorties et retours partiels suivis.
 - Scénarios de tournage avec besoins associés à l’inventaire, quantités et action de préparation directe.
 - OCR de plaque signalétique pour proposer marque, modèle et numéro de série (connexion internet requise ; vérification humaine nécessaire).
 - Export CSV, sauvegarde/restauration JSON, fiches PDF individuelles et inventaire.
-- Propriétaires multiples avec association à chaque exemplaire physique ; hashtags et identifiants Code 128 uniques pour chaque unité, même lorsque plusieurs objets partagent la même référence.
+- Propriétaires multiples avec association à chaque exemplaire physique ; références courtes et EAN-13 distincts pour chaque unité, même lorsque plusieurs objets partagent la même référence.
 - Impression locale de planches A4 Code 128 à la sélection, en formats 35 × 18 mm, 45 × 22 mm et 55 × 25 mm ; aucun compte ou appel Supabase requis pour imprimer.
-- Les nouveaux codes-barres sont stockés dans les données de chaque exemplaire ; aucune migration SQL n’est requise. Les anciennes fiches QR publiques continuent de fonctionner.
+- Les EAN-13 sont stockés dans les données de chaque exemplaire. La table publique nécessite la migration additive `docs/ETIQUETTES-QR.sql` pour les références QR courtes ; les anciennes fiches QR restent compatibles.
 - Stockage local IndexedDB pour rester utilisable hors ligne.
 - Synchronisation périodique Mac ↔ iPhone via Supabase, avec compte utilisateur et règles RLS.
 - Portail web public de demandes de prêt pour clients et collègues : dépôt sans compte avec lien privé de suivi, ou création de compte et historique personnel.
@@ -71,6 +73,12 @@ Puis ouvre `http://localhost:8000`. La caméra et le service worker nécessitent
 - Ne mets jamais la clé `service_role` dans l'application ; utilise uniquement la clé publique. Les données synchronisées contiennent potentiellement des coordonnées de clients : protège l'accès à ton compte.
 - L'OCR lit les inscriptions d'une plaque, mais ne garantit pas l'identification visuelle automatique d'un appareil.
 
+
+### Version 1.9.0 — EAN-13 + QR anti-perte
+- Nouvel identifiant EAN-13 privé pour chaque exemplaire, avec contrôle de validité et migration additive.
+- QR public compact résolu par une page commune ; configuration Supabase dans `src/public-config.js`.
+- Impression native en raster FICHERO 96 × 240 points et contrôle de densité QR.
+- Voir `docs/UPGRADE-1.9.0.md` avant le premier déploiement.
 
 ### Version 1.6.0 — étiquettes Code 128 et scanner mixte
 - Codes-barres Code 128 générés localement pour chaque exemplaire et chaque kit.

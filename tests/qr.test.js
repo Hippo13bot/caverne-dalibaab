@@ -1,0 +1,17 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const context = { window: {}, console, Uint8Array, Math, Array, Error, String, Number, parseInt };
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(require('node:path').join(__dirname, '../src/qr.js'), 'utf8'), context);
+const url = 'https://hippo.github.io/La-Caverne-dAlibaab/contact.html?i=ABCDEFGH';
+const qr = new context.window.QRCodeLib(0, 0);
+qr.addData(url); qr.make();
+const modules = qr.getModuleCount();
+assert.equal(modules, 37);
+assert.ok((modules + 8) * 2 <= 96, 'QR should fit 96px printer head with 4-module quiet zone');
+const longUrl = url + '&project=https%3A%2F%2Fexample.supabase.co&key=' + 'x'.repeat(160);
+const dense = new context.window.QRCodeLib(0, 0);
+dense.addData(longUrl); dense.make();
+assert.ok((dense.getModuleCount() + 8) * 2 > 96, 'Legacy long URL should be rejected for thermal output');
+console.log(`QR OK: short URL ${modules} modules fits; long URL ${dense.getModuleCount()} modules exceeds the native label area.`);

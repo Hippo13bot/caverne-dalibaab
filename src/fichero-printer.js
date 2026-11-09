@@ -53,7 +53,7 @@
   }
 
   function drawLabel(label, type) {
-    // Composition paysage 240 × 96, pivotée dans le raster natif 96 × 240 de la D11s.
+    // Canvas logique paysage 240 × 96, pivoté vers le raster natif 96 × 240.
     const logical=document.createElement('canvas');logical.width=240;logical.height=96;
     const ctx=logical.getContext('2d',{willReadFrequently:true});
     ctx.fillStyle='#fff';ctx.fillRect(0,0,240,96);
@@ -65,25 +65,26 @@
       return toRaster(native);
     };
     if(type==='barcode'){
-      const img=new Image();img.src=Code128Barcode.dataUri(label.unit.barcode);
-      return new Promise((resolve,reject)=>{
-        img.onload=()=>{const maxW=218,maxH=76,ratio=Math.min(maxW/img.naturalWidth,maxH/img.naturalHeight);const dw=Math.round(img.naturalWidth*ratio),dh=Math.round(img.naturalHeight*ratio);const dx=Math.round((240-dw)/2),dy=Math.round((96-dh)/2);ctx.imageSmoothingEnabled=false;ctx.drawImage(img,dx,dy,dw,dh);resolve(finish());};
-        img.onerror=()=>reject(new Error('Impossible de générer le code-barres.'));
-      });
+      if(!window.EAN13Barcode?.valid(label.unit?.ean13))throw new Error('EAN-13 absent ou invalide pour '+(label.item?.name||'cet objet'));
+      EAN13Barcode.draw(ctx,label.unit.ean13,{x:3,y:1,moduleWidth:2,barHeight:64,textY:84,fontSize:10,quiet:11});
+      return finish();
     }
-    const qr=new Image();qr.src=makeQR(label.unit.publicUrl);
-    return new Promise((resolve,reject)=>{
-      qr.onload=()=>{
-        ctx.imageSmoothingEnabled=false;ctx.drawImage(qr,2,5,88,88);
-        const name=String(label.item?.name||'MATÉRIEL');
-        const ref=String(label.unit?.tag||label.unit?.barcode||'');
-        ctx.fillStyle='#000';ctx.textAlign='left';ctx.textBaseline='middle';
-        ctx.font='bold 14px Arial';ctx.fillText(name,98,30,136);
-        ctx.font='bold 12px Arial';ctx.fillText('Réf. '+ref,98,62,136);
-        resolve(finish());
-      };
-      qr.onerror=()=>reject(new Error('Impossible de générer le QR anti-perte.'));
-    });
+    const value=String(label.unit?.publicUrl||'');
+    if(!value)throw new Error('URL publique absente. Publie d’abord la fiche anti-perte.');
+    const qr=new QRCodeLib(0,0);qr.addData(value);qr.make();
+    const count=qr.getModuleCount(),quiet=4,module=2,total=(count+quiet*2)*module;
+    if(total>96)throw new Error('QR trop dense pour le rouleau 30 × 14 mm ('+count+' modules). Configure src/public-config.js pour utiliser une URL courte, puis republie GitHub Pages.');
+    const qx=Math.floor((96-total)/2),qy=Math.floor((96-total)/2);
+    ctx.fillStyle='#fff';ctx.fillRect(qx,qy,total,total);ctx.fillStyle='#000';
+    for(let r=0;r<count;r++)for(let c=0;c<count;c++)if(qr.isDark(r,c))ctx.fillRect(qx+(c+quiet)*module,qy+(r+quiet)*module,module,module);
+    const name=String(label.item?.name||'MATÉRIEL').trim();
+    ctx.fillStyle='#000';ctx.textAlign='left';ctx.textBaseline='middle';ctx.font='bold 12px Arial';
+    const words=name.split(/\s+/);let lines=[''],line=0;
+    for(const word of words){const test=(lines[line]+' '+word).trim();if(ctx.measureText(test).width<=134)lines[line]=test;else if(line===0){line=1;lines[1]=word;}else{lines[1]=lines[1].replace(/…?$/,'…');break;}}
+    ctx.fillText(lines[0],100,25,136);if(lines[1])ctx.fillText(lines[1],100,40,136);
+    ctx.font='bold 10px Arial';ctx.fillText('Réf. '+String(label.unit?.tag||label.unit?.publicCode||''),100,61,136);
+    ctx.font='bold 9px Arial';ctx.fillText('SCANNEZ SI PERDU',100,82,136);
+    return finish();
   }
 
   function toRaster(canvas) {

@@ -1,3 +1,13 @@
+## 1.9.0 — EAN-13 + QR anti-perte
+
+- Chaque exemplaire reçoit un EAN-13 interne valide (préfixe 20–29) et un identifiant public court. Le chiffre de contrôle est calculé conformément à EAN-13 ; ces numéros ne sont pas des codes commerciaux GS1.
+- Migration additive : les anciens codes Code 128 sont conservés dans `unit.barcode` et restent reconnus par le scanner. Les anciens QR `contact.html?id=...&project=...&key=...` restent compatibles.
+- Nouvelle étiquette EAN-13 monochrome, avec numéro lisible, et seconde étiquette QR avec nom d’objet, référence et mention « SCANNEZ SI PERDU ».
+- Impression directe FICHERO en raster natif 96 × 240 points ; le QR trop dense est refusé plutôt que d’être imprimé illisible.
+- Scanner caméra : prise en charge EAN-13, Code 128 et QR.
+- Page publique commune compatible avec les identifiants courts `?i=...` et les anciens liens.
+- Migration Supabase additive fournie dans `docs/ETIQUETTES-QR.sql`. Configuration publique courte documentée dans `docs/UPGRADE-1.9.0.md`.
+
 ## 1.8.3
 - Code-barres raccourci à la référence unique de l’exemplaire, centré et rendu sans étirement.
 - Conservation de l’ancien code-barres comme alias de scan pour compatibilité avec les étiquettes déjà imprimées.
