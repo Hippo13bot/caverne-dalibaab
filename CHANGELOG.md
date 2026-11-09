@@ -1,5 +1,7 @@
 ## 1.9.0 — QR objet + QR anti-perte
 
+- Mise en page des étiquettes : QR à gauche, texte à droite. Étiquette 1 = gros QR + nom de l'objet, plus le hashtag de l'exemplaire seulement s'il y a plusieurs quantités. Étiquette 2 = QR anti-perte (correction d'erreur L, moins dense) + nom, référence et bandeau « SCANNEZ SI PERDU ». Taille de police ajustée automatiquement. L'impression via fenêtre utilise exactement le même rendu que l'imprimante.
+- Bouton « Copier public-config.js » dans la fenêtre Étiquettes ; message explicite si les QR courts ne sont pas encore activés.
 - Plus de code-barres : l'étiquette 1 est un seul gros QR noir sur fond blanc, sans texte, qui encode une référence courte `CA-XXXXXXXX` (11 caractères → QR version 1, 21 × 21 modules, module de 4 points sur la tête native 96 points).
 - Étiquette 2 inchangée dans son principe : QR anti-perte vers la page publique commune `contact.html?i=XXXXXXXX`, nom de l'objet (jamais la marque), référence courte et « SCANNEZ SI PERDU ».
 - Impression directe FICHERO en paire : QR objet puis QR anti-perte, en une seule action, raster natif 96 × 240 points sans interpolation. Un QR trop dense est refusé plutôt qu'imprimé illisible.

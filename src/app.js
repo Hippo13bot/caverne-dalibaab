@@ -245,6 +245,7 @@ async function publishOwnerQrLabels(labels){
   if(!cfg.url||!cfg.key)throw Error('Configure Supabase dans Exports & impressions avant de publier les QR anti-perte.');
   const session=await ensureSyncSession(cfg);
   if(!session?.access_token)throw Error('Connecte-toi au compte propriétaire dans Exports & impressions avant de publier les QR anti-perte.');
+  {const pc=window.CAVERNE_PUBLIC_CONFIG||{};if(String(pc.supabaseUrl||'').replace(/\/$/,'')!==cfg.url.replace(/\/$/,'')||String(pc.supabaseAnonKey||'')!==cfg.key)throw Error('Les QR courts ne sont pas encore activés (le QR long serait illisible sur 30 × 14 mm).\n\n1. Clique sur « Copier public-config.js » dans la fenêtre Étiquettes.\n2. Sur GitHub, ouvre src/public-config.js, colle le contenu à la place de l’ancien et enregistre (Commit).\n3. Attends la fin du déploiement GitHub Pages (onglet Actions), recharge l’app, puis relance l’impression.');}
   const base=(localStorage.getItem('caverne_portal_base')||$('#portalBaseUrl')?.value||'').trim().replace(/\/$/,'');
   if(!/^https:\/\//i.test(base))throw Error('Renseigne et publie d’abord l’adresse GitHub Pages dans Portail clients & collègues.');
   const rows=labels.map(({item,unit})=>{
@@ -279,22 +280,18 @@ $('#printDirectFichero')?.addEventListener('click',async()=>{
     status.textContent='Connexion à l’imprimante FICHERO…'; const info=await FicheroPrinter.connect();
     await FicheroPrinter.print(labels,'pair',({current,total})=>{status.textContent='Impression : '+current+' / '+total+' étiquettes…';});
     status.textContent='Terminé : '+(labels.length*2)+' étiquettes ('+labels.length+' paires) envoyées à '+info.name+'.';persistAll();
-  }catch(err){status.textContent='Erreur d’impression : '+err.message;alert('Impression FICHERO : '+err.message+'\\n\\nVérifie Supabase, le propriétaire affecté, GitHub Pages et la connexion Bluetooth.');}
+  }catch(err){status.textContent='Erreur d’impression : '+err.message;alert('Impression FICHERO : '+err.message+'\n\nVérifie Supabase, le propriétaire affecté, GitHub Pages et la connexion Bluetooth.');}
   finally{button.disabled=false;}
 });
 function printLabelRoll(labels,type,w){
-  const html=labels.map(({item,unit})=>{
-    const barcode=`<div class="label barcode-label"><img src="${makeQR(CavernCodes.objectQrValue(unit.publicCode),{margin:1})}" alt="QR objet"></div>`;
-    const qr=`<div class="label qr-label"><img src="${makeQR(unit.publicUrl)}" alt="QR anti-perte"><div class="label-copy"><b>${esc(item.name||'MATÉRIEL')}</b><small>Réf. ${esc(unit.tag)}</small><strong>SCANNEZ SI PERDU</strong></div></div>`;
-    if(type==='pair')return barcode+qr;
-    if(type==='owner-qr')return qr; return barcode;
-  }).join('');
+  // Même rendu 240 × 96 points que l'impression Bluetooth : l'aperçu correspond exactement à l'étiquette.
+  const img=(l,t)=>`<div class="label"><img src="${FicheroPrinter.logicalDataUrl(l,t)}" alt="${t==='object-qr'?'QR objet':'QR anti-perte'}"></div>`;
+  const html=labels.map(l=>type==='pair'?img(l,'object-qr')+img(l,'owner-qr'):img(l,type==='owner-qr'?'owner-qr':'object-qr')).join('');
   if(!w||w.closed)throw Error('La fenêtre d’impression a été fermée.');
   w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquettes 30 × 14 mm</title><style>
-  @page{size:30mm 14mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:30mm;background:#fff;color:#000;font-family:Arial,sans-serif}
-  .label{width:30mm;height:14mm;overflow:hidden;display:flex;align-items:center;justify-content:center;break-after:page;page-break-after:always;background:#fff;padding:.45mm;gap:.5mm}
-  .label:last-child{break-after:auto;page-break-after:auto}.barcode-label{padding:.5mm;justify-content:center;align-items:center}.barcode-label img{display:block;width:12mm;height:12mm;image-rendering:pixelated;margin:auto}
-  .qr-label{flex-direction:row;justify-content:center;gap:1.2mm;padding:.5mm}.qr-label img{width:13mm;height:13mm;flex:0 0 13mm;object-fit:contain;display:block}.label-copy{display:flex;flex-direction:column;justify-content:center;gap:1mm;width:14.5mm;min-width:0;overflow:hidden}.label-copy b{font-size:6.2pt;line-height:1.05;white-space:normal;overflow-wrap:anywhere;max-height:6mm}.label-copy small{font-size:5pt;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.label-copy strong{font-size:5.1pt;line-height:1.05;white-space:nowrap;letter-spacing:.05mm}
+  @page{size:30mm 14mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:30mm;background:#fff;color:#000}
+  .label{width:30mm;height:14mm;overflow:hidden;display:flex;align-items:center;justify-content:center;break-after:page;page-break-after:always;background:#fff}
+  .label:last-child{break-after:auto;page-break-after:auto}.label img{display:block;width:30mm;height:12mm;image-rendering:pixelated}
   @media screen{body{background:#ddd}.label{margin:5mm auto;box-shadow:0 1px 5px #777}}
   </style></head><body>${html}<script>window.onload=()=>setTimeout(()=>window.print(),350)<\/script></body></html>`);w.document.close();
 }
@@ -305,6 +302,13 @@ async function printSelectedOwnerQrLabels(){
   catch(err){if(!w.closed)w.close();alert('QR anti-perte : '+err.message);}
 }
 $('#printOwnerQrLabels')?.addEventListener('click',printSelectedOwnerQrLabels);
+$('#copyPublicConfig')?.addEventListener('click',async()=>{
+  const cfg=getSyncConfig();if(!cfg.url||!cfg.key)return alert('Configure d’abord Supabase dans Exports & impressions.');
+  try{const role=JSON.parse(atob(cfg.key.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).role;if(role==='service_role')return alert('Cette clé est une clé service_role : ne la publie jamais. Utilise la clé anon / publishable.');}catch(e){}
+  const text="/* Configuration publique du portail anti-perte (clé anon/publishable uniquement). */\nwindow.CAVERNE_PUBLIC_CONFIG = {\n  supabaseUrl: '"+cfg.url.replace(/\/$/,'')+"',\n  supabaseAnonKey: '"+cfg.key+"'\n};\n";
+  try{await navigator.clipboard.writeText(text);$('#ficheroPrinterStatus').textContent='Contenu de public-config.js copié : colle-le dans src/public-config.js sur GitHub.';}
+  catch(e){prompt('Copie ce contenu dans src/public-config.js :',text);}
+});
 
 function qrLink(id){ return String(id); }
 function makeQR(value,opts={}){ const qr=new QRCodeLib(0,0); qr.addData(String(value)); qr.make(); const count=qr.getModuleCount();if((count+2*(opts.margin??4))*2>96)throw new Error('QR trop dense pour le rouleau 30 × 14 mm ('+count+' modules). Configure src/public-config.js avec ton projet Supabase et republie GitHub Pages pour utiliser une URL courte.');const scale=10, margin=opts.margin??4, canvas=document.createElement('canvas'); canvas.width=canvas.height=(count+margin*2)*scale; const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#111';for(let r=0;r<count;r++)for(let c=0;c<count;c++)if(qr.isDark(r,c))ctx.fillRect((c+margin)*scale,(r+margin)*scale,scale,scale);return canvas.toDataURL('image/png'); }

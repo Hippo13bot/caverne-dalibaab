@@ -6,7 +6,6 @@
   const SERVICE = '000018f0-0000-1000-8000-00805f9b34fb';
   const WRITE = '00002af1-0000-1000-8000-00805f9b34fb';
   const NOTIFY = '00002af0-0000-1000-8000-00805f9b34fb';
-  const HEIGHT_LOGICAL = 96;
   const WIDTH = 96, HEIGHT = 240; // tête native 96 px (14 mm) × avance 240 px (30 mm)
   let device = null, characteristic = null, server = null;
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -53,46 +52,109 @@
     return { name: device?.name || 'FICHERO / D11s', connected: !!device?.gatt?.connected };
   }
 
-  function drawLabel(label, type) {
-    // Canvas logique paysage 240 × 96, pivoté vers le raster natif 96 × 240.
-    const logical=document.createElement('canvas');logical.width=240;logical.height=96;
-    const ctx=logical.getContext('2d',{willReadFrequently:true});
-    ctx.fillStyle='#fff';ctx.fillRect(0,0,240,96);
-    const finish=()=>{
-      const native=document.createElement('canvas');native.width=WIDTH;native.height=HEIGHT;
-      const nctx=native.getContext('2d',{willReadFrequently:true});
-      nctx.fillStyle='#fff';nctx.fillRect(0,0,WIDTH,HEIGHT);
-      nctx.translate(WIDTH,0);nctx.rotate(Math.PI/2);nctx.imageSmoothingEnabled=false;nctx.drawImage(logical,0,0);
-      return toRaster(native);
-    };
-    if(type==='object-qr'){
-      // Étiquette 1 : un seul QR noir sur fond blanc, aucun texte, module de 4 points (version 1 = 21 × 21 modules = 84 points).
-      const value=CavernCodes.objectQrValue(label.unit?.publicCode);
-      const qr=new QRCodeLib(0,0);qr.addData(value);qr.make();
-      const count=qr.getModuleCount(),module=Math.floor(92/count),size=count*module;
-      if(size>HEIGHT_LOGICAL)throw new Error('QR objet trop grand pour la tête d’impression.');
-      const qx=Math.floor((240-size)/2),qy=Math.floor((HEIGHT_LOGICAL-size)/2);
-      ctx.fillStyle='#000';
-      for(let r=0;r<count;r++)for(let c=0;c<count;c++)if(qr.isDark(r,c))ctx.fillRect(qx+c*module,qy+r*module,module,module);
-      return finish();
+  const LW = 240, LH = 96; // canevas logique paysage (30 × 12 mm à 203 dpi)
+  const FONT = 'Arial, Helvetica, sans-serif';
+  function wrapLines(ctx, text, maxW) {
+    const lines = []; let line = '';
+    for (const rawWord of String(text).trim().split(/\s+/).filter(Boolean)) {
+      let word = rawWord;
+      while (ctx.measureText(word).width > maxW && word.length > 1) { // mot trop long : coupe au caractère
+        let k = word.length - 1; while (k > 1 && ctx.measureText(word.slice(0, k)).width > maxW) k--;
+        if (line) { lines.push(line); line = ''; }
+        lines.push(word.slice(0, k)); word = word.slice(k);
+      }
+      const test = line ? line + ' ' + word : word;
+      if (ctx.measureText(test).width <= maxW) line = test; else { if (line) lines.push(line); line = word; }
     }
-    const value=String(label.unit?.publicUrl||'');
-    if(!value)throw new Error('URL publique absente. Publie d’abord la fiche anti-perte.');
-    const qr=new QRCodeLib(0,0);qr.addData(value);qr.make();
-    const count=qr.getModuleCount(),quiet=4,module=2,total=(count+quiet*2)*module;
-    if(total>96)throw new Error('QR trop dense pour le rouleau 30 × 14 mm ('+count+' modules). Configure src/public-config.js pour utiliser une URL courte, puis republie GitHub Pages.');
-    const qx=Math.floor((96-total)/2),qy=Math.floor((96-total)/2);
-    ctx.fillStyle='#fff';ctx.fillRect(qx,qy,total,total);ctx.fillStyle='#000';
-    for(let r=0;r<count;r++)for(let c=0;c<count;c++)if(qr.isDark(r,c))ctx.fillRect(qx+(c+quiet)*module,qy+(r+quiet)*module,module,module);
-    const name=String(label.item?.name||'MATÉRIEL').trim();
-    ctx.fillStyle='#000';ctx.textAlign='left';ctx.textBaseline='middle';ctx.font='bold 12px Arial';
-    const words=name.split(/\s+/);let lines=[''],line=0;
-    for(const word of words){const test=(lines[line]+' '+word).trim();if(ctx.measureText(test).width<=134)lines[line]=test;else if(line===0){line=1;lines[1]=word;}else{lines[1]=lines[1].replace(/…?$/,'…');break;}}
-    ctx.fillText(lines[0],100,25,136);if(lines[1])ctx.fillText(lines[1],100,40,136);
-    ctx.font='bold 10px Arial';ctx.fillText('Réf. '+String(label.unit?.tag||label.unit?.publicCode||''),100,61,136);
-    ctx.font='bold 9px Arial';ctx.fillText('SCANNEZ SI PERDU',100,82,136);
-    return finish();
+    if (line) lines.push(line); return lines;
   }
+  function fitText(ctx, text, { maxW, maxLines, maxH, sizes }) {
+    for (const size of sizes) {
+      ctx.font = `bold ${size}px ${FONT}`;
+      const lines = wrapLines(ctx, text, maxW);
+      if (lines.length <= maxLines && lines.length * size * 1.1 <= maxH) return { size, lines };
+    }
+    const size = sizes[sizes.length - 1]; ctx.font = `bold ${size}px ${FONT}`;
+    let lines = wrapLines(ctx, text, maxW);
+    if (lines.length > maxLines) {
+      lines = lines.slice(0, maxLines); let last = lines[maxLines - 1];
+      while (last.length > 1 && ctx.measureText(last + '…').width > maxW) last = last.slice(0, -1);
+      lines[maxLines - 1] = last + '…';
+    }
+    return { size, lines };
+  }
+  function drawBlock(ctx, fit, x, top, height, color = '#000') { // bloc de texte centré verticalement dans [top, top+height]
+    const lh = fit.size * 1.1, h = fit.lines.length * lh; let y = top + Math.max(0, (height - h) / 2);
+    ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = `bold ${fit.size}px ${FONT}`;
+    for (const line of fit.lines) { ctx.fillText(line, x, Math.round(y)); y += lh; }
+    return h;
+  }
+  function drawQr(ctx, qr, x, y, module) {
+    const count = qr.getModuleCount(); ctx.fillStyle = '#000';
+    for (let r = 0; r < count; r++) for (let c = 0; c < count; c++) if (qr.isDark(r, c)) ctx.fillRect(x + c * module, y + r * module, module, module);
+  }
+  function makeQr(value, level) { const qr = new QRCodeLib(0, level); qr.addData(value); qr.make(); return qr; }
+
+  // Rendu logique 240 × 96 (noir sur blanc). Utilisé à la fois pour l'impression Bluetooth et la fenêtre d'impression.
+  function drawLogical(label, type) {
+    const logical = document.createElement('canvas'); logical.width = LW; logical.height = LH;
+    const ctx = logical.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, LW, LH);
+    const name = String(label.item?.name || 'MATÉRIEL').trim();
+    if (type === 'object-qr') {
+      // Étiquette 1 : QR d'identification le plus gros possible (version 1 = 21 modules × 4 points = 84 points), nom à droite,
+      // et hashtag de l'exemplaire seulement s'il y a plusieurs quantités.
+      const qr = makeQr(CavernCodes.objectQrValue(label.unit?.publicCode), 0);
+      const count = qr.getModuleCount(), module = Math.floor(LH / (count + 1)), size = count * module; // ≥ 1 module de marge
+      const qx = Math.floor((LH - size) / 2), qy = qx;
+      if (size > LH) throw new Error('QR objet trop grand pour la tête d’impression.');
+      drawQr(ctx, qr, qx, qy, module);
+      const x0 = LH + 4, maxW = LW - x0 - 4, top = 5, area = LH - 10;
+      const many = (label.item?.units?.length || 1) > 1, tag = String(label.unit?.tag || '').trim();
+      if (many && tag) {
+        const tagFit = fitText(ctx, tag, { maxW, maxLines: 1, maxH: 30, sizes: [24, 22, 20, 18, 16, 15, 14, 13, 12] });
+        const tagH = Math.ceil(tagFit.size * 1.1) + 2;
+        const nameFit = fitText(ctx, name, { maxW, maxLines: 2, maxH: area - tagH - 3, sizes: [26, 24, 22, 20, 18, 16, 15, 14, 13, 12, 11] });
+        drawBlock(ctx, nameFit, x0, top, area - tagH - 3);
+        drawBlock(ctx, tagFit, x0, top + area - tagH, tagH);
+      } else {
+        const nameFit = fitText(ctx, name, { maxW, maxLines: 3, maxH: area, sizes: [28, 26, 24, 22, 20, 18, 16, 15, 14, 13, 12, 11] });
+        drawBlock(ctx, nameFit, x0, top, area);
+      }
+      return logical;
+    }
+    if (type === 'owner-qr') {
+      const value = String(label.unit?.publicUrl || '');
+      if (!value) throw new Error('URL publique absente. Publie d’abord la fiche anti-perte.');
+      const qr = makeQr(value, 1); // correction d'erreur L : QR le moins dense possible
+      const count = qr.getModuleCount(); let quiet = 4;
+      while (quiet > 2 && (count + 2 * quiet) * 2 > LH) quiet--;
+      const total = (count + quiet * 2) * 2;
+      if (total > LH) throw new Error('QR anti-perte trop dense pour le rouleau 30 × 14 mm (' + count + ' modules). Active les QR courts : voir docs/UPGRADE-1.9.0.md.');
+      const qx = Math.floor((LH - total) / 2);
+      drawQr(ctx, qr, qx + quiet * 2, qx + quiet * 2, 2);
+      const x0 = LH + 2, maxW = LW - x0 - 4, top = 5, area = LH - 10;
+      const refFit = fitText(ctx, 'Réf. ' + String(label.unit?.tag || label.unit?.publicCode || ''), { maxW, maxLines: 1, maxH: 16, sizes: [13, 12, 11, 10, 9] });
+      const footFit = fitText(ctx, 'SCANNEZ SI PERDU', { maxW: maxW - 6, maxLines: 1, maxH: 18, sizes: [14, 13, 12, 11, 10, 9] });
+      const footH = Math.ceil(footFit.size * 1.1) + 5, refH = Math.ceil(refFit.size * 1.1) + 1;
+      ctx.fillStyle = '#000'; ctx.fillRect(x0, top + area - footH, maxW, footH); // bandeau noir, texte blanc
+      drawBlock(ctx, footFit, x0 + 3, top + area - footH, footH, '#fff');
+      drawBlock(ctx, refFit, x0, top + area - footH - refH - 1, refH);
+      const nameFit = fitText(ctx, name, { maxW, maxLines: 3, maxH: area - footH - refH - 5, sizes: [22, 20, 18, 16, 15, 14, 13, 12, 11] });
+      drawBlock(ctx, nameFit, x0, top, area - footH - refH - 5);
+      return logical;
+    }
+    throw new Error('Type d’étiquette inconnu : ' + type);
+  }
+  function drawLabel(label, type) {
+    const logical = drawLogical(label, type);
+    const native = document.createElement('canvas'); native.width = WIDTH; native.height = HEIGHT;
+    const nctx = native.getContext('2d', { willReadFrequently: true });
+    nctx.fillStyle = '#fff'; nctx.fillRect(0, 0, WIDTH, HEIGHT);
+    nctx.translate(WIDTH, 0); nctx.rotate(Math.PI / 2); nctx.imageSmoothingEnabled = false; nctx.drawImage(logical, 0, 0);
+    return toRaster(native);
+  }
+  function logicalDataUrl(label, type) { return drawLogical(label, type).toDataURL('image/png'); }
 
   function toRaster(canvas) {
     const { data } = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, WIDTH, HEIGHT);
@@ -135,5 +197,5 @@
     if (device?.gatt?.connected) device.gatt.disconnect();
     device = null; server = null; characteristic = null;
   }
-  window.FicheroPrinter = { connect, print, disconnect, getInfo };
+  window.FicheroPrinter = { connect, print, disconnect, getInfo, logicalDataUrl };
 })();
