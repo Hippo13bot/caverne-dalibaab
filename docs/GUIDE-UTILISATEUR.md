@@ -9,12 +9,13 @@
 ## Sur Mac
 Ouvre l'application installée. La caméra doit être autorisée dans Réglages Système ▸ Confidentialité et sécurité ▸ Caméra.
 
-## Inventaire et QR codes
+## Inventaire et identification par code-barres
 - Ajoute un équipement avec ses photos, marque, modèle, numéro de série, garantie, emplacement et état.
 - Le champ **QR / code-barres existant** permet de conserver le contenu du QR fabricant.
 - Dans **Scanners ▸ SCAN**, scanne une étiquette existante. Si elle n'est pas encore liée, saisis le nom exact d'une fiche existante pour associer le code, ou crée une nouvelle fiche.
 - Les scans suivants ouvrent directement la fiche liée.
-- Le QR généré par l'application contient un identifiant stable de fiche. Les anciens QR fabricant restent utilisables s'ils ont été associés.
+- Chaque exemplaire reçoit automatiquement un identifiant Code 128 unique de type `CA-CAT-XXXXX`. Il est enregistré avec la fiche et synchronisé avec les données existantes.
+- Les anciens QR codes et QR fabricant restent scannables : le scanner accepte simultanément Code 128 et QR Code pendant la transition.
 
 ## Départs et retours
 - **DÉPART** : scanne chaque équipement. Il apparaît dans une liste de contrôle. Vérifie les quantités et valide le départ pour mettre les fiches en statut **Emprunté / sorti**, renseigner le détenteur et générer le bordereau PDF.
@@ -23,16 +24,16 @@ Ouvre l'application installée. La caméra doit être autorisée dans Réglages 
 
 ## Sacs et kits
 1. Crée un sac ou un kit et ajoute chaque référence avec sa quantité réelle dans le contenant.
-2. Sur sa fiche, utilise **QR du kit** pour générer un QR propre au kit. Imprime-le et colle-le sur le contenant.
-3. En mode **SCAN**, scanne le QR du kit : sa composition s’ouvre en contrôle détaillé.
-4. Scanne ensuite chaque QR matériel du kit : le compteur de la ligne correspondante augmente une unité à la fois. Les boutons + / − permettent aussi un contrôle manuel.
+2. Sur sa fiche, utilise **Code-barres du kit** pour générer un Code 128 propre au contenant. Imprime-le et colle-le sur le contenant.
+3. En mode **SCAN**, scanne le code-barres du kit : sa composition s’ouvre en contrôle détaillé. Les anciens QR de kits continuent également de fonctionner.
+4. Scanne ensuite chaque code-barres matériel du kit : le compteur de la ligne correspondante augmente une unité à la fois. Les boutons + / − permettent aussi un contrôle manuel.
 5. En mode **DÉPART**, le contrôle du kit alimente la liste de départ avec les quantités pointées. En mode **RETOUR**, le contrôle permet d’enregistrer les quantités rendues.
 6. Utilise **Fiche PDF** pour imprimer le contenu attendu du sac.
 
-Les anciens kits restent compatibles : chaque matériel déjà présent dans un ancien kit est considéré comme une unité.
+Les codes-barres de kits sont ajoutés automatiquement aux kits existants sans changer leur composition. Les anciens QR de kits restent scannables. Les anciens kits restent compatibles : chaque matériel déjà présent dans un ancien kit est considéré comme une unité.
 
 ## Tournages
-Crée un scénario et ajoute les besoins en choisissant si possible une référence de l’inventaire (ou en saisissant un besoin libre), la quantité et une note. **Préparer** transforme les références reconnues en liste de départ. Les besoins libres ou non associés sont signalés pour éviter de sortir un matériel approximatif. Le QR du scénario permet aussi de retrouver sa préparation depuis le scanner.
+Crée un scénario et ajoute les besoins en choisissant si possible une référence de l’inventaire (ou en saisissant un besoin libre), la quantité et une note. **Préparer** transforme les références reconnues en liste de départ. Les besoins libres ou non associés sont signalés pour éviter de sortir un matériel approximatif. Le code-barres du scénario permet aussi de retrouver sa préparation depuis le scanner.
 
 ## Locations
 1. Dans le panneau **Locations de tournage**, utilise **Nouvelle location** pour créer un contrat avec le nom du client, prénom, contact et dates de début / fin.
@@ -67,11 +68,11 @@ Le bouton **Rechercher par photo** utilise l'OCR pour lire les inscriptions d'un
 
 ## Quantités dans les sacs et kits
 
-Lors de la création d’un sac ou d’un kit, ajoute chaque référence de matériel puis indique le nombre d’exemplaires réellement présents dans ce contenant. La fiche PDF du kit reprend cette quantité (et non la quantité totale de l’inventaire). Les anciens kits restent compatibles : chaque matériel déjà présent dans un ancien kit est considéré comme une unité.
+Lors de la création d’un sac ou d’un kit, ajoute chaque référence de matériel puis indique le nombre d’exemplaires réellement présents dans ce contenant. La fiche PDF du kit reprend cette quantité (et non la quantité totale de l’inventaire). Les codes-barres de kits sont ajoutés automatiquement aux kits existants sans changer leur composition. Les anciens QR de kits restent scannables. Les anciens kits restent compatibles : chaque matériel déjà présent dans un ancien kit est considéré comme une unité.
 
-## Scanner et QR codes
+## Scanner (Code 128 et anciens QR)
 
-Au démarrage de la caméra, l’application déverrouille l’audio à partir du toucher sur le bouton. Chaque scan reconnu déclenche ensuite un bip. Les QR des étiquettes publiques (liens `contact.html`) sont également reconnus directement par le scanner intégré : l’application extrait automatiquement le jeton de l’exemplaire et ouvre la fiche matériel correspondante en mode SCAN, ou traite le matériel en mode DÉPART / RETOUR. Une vibration est demandée si le navigateur expose l’API correspondante ; certains navigateurs iOS ne permettent pas la vibration depuis une page web. En mode DÉPART, la quantité scannée est limitée au stock disponible. Les QR fabricant existants restent reconnus lorsqu’ils sont associés à une fiche.
+Au démarrage de la caméra, l’application déverrouille l’audio à partir du toucher sur le bouton. Chaque scan reconnu déclenche ensuite un bip. Les QR des étiquettes publiques (liens `contact.html`) sont également reconnus directement par le scanner intégré : l’application extrait automatiquement le jeton de l’exemplaire et ouvre la fiche matériel correspondante en mode SCAN, ou traite le matériel en mode DÉPART / RETOUR. Une vibration est demandée si le navigateur expose l’API correspondante ; certains navigateurs iOS ne permettent pas la vibration depuis une page web. En mode DÉPART, la quantité scannée est limitée au stock disponible. Les QR fabricant existants restent reconnus lorsqu’ils sont associés à une fiche. Un lecteur USB/Bluetooth en mode clavier est aussi accepté dans l’onglet Scanners : il suffit de scanner le code et de laisser le lecteur envoyer Entrée.
 
 
 ## Portail de demandes de prêt en ligne (v1.4.0)
@@ -86,13 +87,14 @@ Les demandeurs peuvent déposer une demande sans compte : le lien privé affich�
 
 **Sécurité :** seule la clé publique Supabase (`sb_publishable_…` ou clé anon) est incluse dans le lien. Ne jamais utiliser `service_role`. Les demandes ne sont pas accessibles publiquement : le suivi invité exige un jeton secret, et l’espace de gestion exige le compte propriétaire.
 
-## Étiquettes QR avec contact propriétaire
+## Étiquettes Code 128 (nouvelle version 1.6.0)
 
-1. Dans **Exports & impressions**, ouvre **Gérer les propriétaires** et ajoute les personnes ou structures propriétaires du matériel. Les cases téléphone/e-mail déterminent les coordonnées visibles publiquement.
-2. Dans **Mon inventaire**, modifie chaque fiche et choisis son propriétaire. Si un article a plusieurs exemplaires, l'application crée un hashtag et un QR différents pour chaque exemplaire.
-3. Dans **Exports & impressions**, renseigne l'adresse HTTPS de ton site GitHub Pages dans **Préparer les étiquettes**. Connecte-toi au compte Supabase partagé sur cet appareil.
-4. Dans Supabase > SQL Editor, exécute une fois le fichier `docs/ETIQUETTES-QR.sql`. Cette table ne publie que les fiches QR sélectionnées depuis l'application ; les coordonnées cochées sont accessibles à toute personne qui scanne le QR.
-5. Sélectionne les exemplaires et le format, puis clique sur **Publier & imprimer la planche A4**. Dans la fenêtre d'impression, choisis le papier A4 autocollant adapté à ton imprimante et l'échelle **100 % / taille réelle** (désactive « Ajuster à la page »).
-6. Pour une meilleure tenue, recouvre la feuille imprimée avec un film adhésif transparent de plastification à froid avant de découper les étiquettes. Teste le scan après pelliculage.
+1. Dans **Mon inventaire**, utilise **Étiquettes** sur une fiche pour sélectionner ses exemplaires, ou ouvre **Exports & impressions** pour sélectionner plusieurs matériels.
+2. Choisis le format mini (35 × 18 mm), compact (45 × 22 mm) ou confort (55 × 25 mm).
+3. Clique sur **Imprimer la planche A4**. Tu peux imprimer directement ou enregistrer en PDF à 100 % / taille réelle.
+4. Chaque unité physique possède son propre Code 128 et son hashtag. Les codes sont créés localement : aucune publication publique ni migration SQL Supabase n'est nécessaire.
+5. Pour les kits, utilise **Code-barres du kit** sur la fiche du contenant puis imprime le code affiché.
 
-Formats proposés : mini 25 × 25 mm, compact 35 × 25 mm et confort 45 × 30 mm. Pour une lecture fiable, le format mini reste un petit QR : teste-le avec les téléphones utilisés avant d'imprimer toute une série. Les QR publics nécessitent une connexion Internet au moment du scan. Le QR contient l'URL publique, l'URL du projet Supabase et la clé publishable (publique) ; ne place jamais de clé `service_role` dans un QR.
+Le scanner intégré reconnaît les nouveaux Code 128 ainsi que les QR codes déjà posés. Les anciennes étiquettes QR ne sont donc pas invalidées. Les nouveaux codes-barres sont des identifiants internes : ils n'ouvrent pas une page de contact avec l'appareil photo natif du téléphone. Les coordonnées des propriétaires ne sont jamais imprimées sur ces étiquettes.
+
+Pour une lecture fiable, conserve un contraste noir sur blanc, imprime à taille réelle et protège les étiquettes avec un film transparent adapté. Teste un exemplaire avant d'imprimer toute la série.

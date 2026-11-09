@@ -57,10 +57,13 @@ const idb = {
       if (oldItems.length || oldKits.length) await idb.set('state', st);
     }
     items = st.items || []; items.forEach(ensureItemUnits);
-    kits  = st.kits || [];
-    travel = st.travel || [];
+    kits  = st.kits || []; kits.forEach(ensureKitBarcode);
+    travel = st.travel || []; travel.forEach(ensureTravelBarcode);
     loans = st.loans || [];
     movements = st.movements || []; owners = st.owners || []; stateUpdatedAt=st.updatedAt||stateUpdatedAt;
+    // Migration additive : mémorise les identifiants créés pour les anciens enregistrements,
+    // sans modifier l'horodatage de synchronisation ni écraser une version cloud plus récente.
+    await idb.set('state',{...st,items,kits,travel,loans,movements,owners});
   } catch (e) { alert("Le stockage de l'appareil est indisponible (Navigation privée ?). Les données ne seront pas conservées."); }
   window.__bootTrace = [];
   window.__bootTrace.push('start');
@@ -97,19 +100,21 @@ function renderInventory(){
   const cats=[...new Set(items.map(x=>x.category).filter(Boolean))].sort();
   $('#categoryFilter').innerHTML='<option value="all">Toutes catégories</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   $('#categoryFilter').value=cats.includes(cf)?cf:'all';
-  const filtered=items.filter(x=>matchesStatus(x,sf)&&(cf==='all'||x.category===cf)&&[x.name,x.brand,x.model,x.serial,x.category,x.location,x.holder].join(' ').toLowerCase().includes(q));
+  const filtered=items.filter(x=>matchesStatus(x,sf)&&(cf==='all'||x.category===cf)&&[x.name,x.brand,x.model,x.serial,x.category,x.location,x.holder,...(x.units||[]).flatMap(u=>[u.tag,u.barcode])].join(' ').toLowerCase().includes(q));
   $('#count').textContent=`${filtered.length} référence(s) · ${filtered.reduce((n,x)=>n+Math.max(1,Number(x.quantity)||1),0)} unité(s)`;
-  $('#inventory').innerHTML=filtered.length?filtered.map(x=>`<article class="item-card">${x.photo?`<img src="${x.photo}" alt="">`:''}<div class="item-meta"><span class="pill">${esc(x.category)}</span><span class="pill ${esc(displayStatus(x)==='partial'?'loaned':displayStatus(x))}">${statusNames[displayStatus(x)]}</span></div><h3>${esc(x.name)}</h3><p>${esc([x.brand,x.model].filter(Boolean).join(' · ')||'Modèle non renseigné')}<br>Quantité totale : ${Math.max(1,Number(x.quantity)||1)}${x.stockQty!=null||x.loanedQty!=null?`<br>En stock : ${Number(x.stockQty)||0} · Sorti : ${Number(x.loanedQty)||0}`:''}<br>${x.serial?'N° série : '+esc(x.serial):'Sans numéro de série'}<br>${x.location?'Emplacement : '+esc(x.location):'Emplacement non renseigné'}${x.holder?'<br>Avec : '+esc(x.holder):''}${x.dueDate?'<br>Retour prévu : '+esc(x.dueDate):''}${x.status==='unavailable'&&x.reason?'<br>'+reasonNames[x.reason]:''}</p><div class="card-actions"><button class="btn subtle" data-edit="${x.id}">Modifier</button><button class="btn subtle" data-qr="${x.id}">QR code</button><button class="btn subtle" data-label-item="${x.id}">Étiquettes</button><button class="btn subtle" data-print="${x.id}">Fiche PDF</button><button class="btn subtle" data-printloan="${x.id}">Fiche location</button><button class="btn subtle" data-delete="${x.id}">Supprimer</button></div></article>`).join(''):'<div class="empty">Aucun équipement correspondant. Ajoute ton matériel.</div>';
+  $('#inventory').innerHTML=filtered.length?filtered.map(x=>`<article class="item-card">${x.photo?`<img src="${x.photo}" alt="">`:''}<div class="item-meta"><span class="pill">${esc(x.category)}</span><span class="pill ${esc(displayStatus(x)==='partial'?'loaned':displayStatus(x))}">${statusNames[displayStatus(x)]}</span></div><h3>${esc(x.name)}</h3><p>${esc([x.brand,x.model].filter(Boolean).join(' · ')||'Modèle non renseigné')}<br>Quantité totale : ${Math.max(1,Number(x.quantity)||1)}${x.stockQty!=null||x.loanedQty!=null?`<br>En stock : ${Number(x.stockQty)||0} · Sorti : ${Number(x.loanedQty)||0}`:''}<br>${x.serial?'N° série : '+esc(x.serial):'Sans numéro de série'}<br>${x.location?'Emplacement : '+esc(x.location):'Emplacement non renseigné'}${x.holder?'<br>Avec : '+esc(x.holder):''}${x.dueDate?'<br>Retour prévu : '+esc(x.dueDate):''}${x.status==='unavailable'&&x.reason?'<br>'+reasonNames[x.reason]:''}</p><div class="card-actions"><button class="btn subtle" data-edit="${x.id}">Modifier</button><button class="btn subtle" data-barcode="${x.id}">Code-barres</button><button class="btn subtle" data-label-item="${x.id}">Étiquettes</button><button class="btn subtle" data-print="${x.id}">Fiche PDF</button><button class="btn subtle" data-printloan="${x.id}">Fiche location</button><button class="btn subtle" data-delete="${x.id}">Supprimer</button></div></article>`).join(''):'<div class="empty">Aucun équipement correspondant. Ajoute ton matériel.</div>';
 }
 function kitEntries(kit){const grouped=new Map();(kit.items||[]).forEach(entry=>{const itemId=typeof entry==='string'?entry:(entry.itemId||entry.id);if(!itemId)return;const qty=typeof entry==='string'?1:Math.max(1,Number(entry.qty)||1);grouped.set(itemId,(grouped.get(itemId)||0)+qty);});return [...grouped].map(([itemId,qty])=>({itemId,qty}));}
 
 function renderKits(){
-  $('#kits').innerHTML=kits.length?kits.map(k=>{const entries=kitEntries(k),units=entries.reduce((n,e)=>n+e.qty,0);return `<article class="item-card"><div class="item-meta"><span class="pill">SAC / KIT</span><span class="pill">${entries.length} référence(s) · ${units} unité(s)</span></div><h3>${esc(k.name)}</h3><p>${esc(k.location||'Emplacement non renseigné')}<br>${esc(k.description||'')}<br>${entries.map(e=>{const x=items.find(i=>i.id===e.itemId);return x?`${esc(x.name)} × ${e.qty}`:''}).filter(Boolean).join(' · ')}</p><div class="card-actions"><button class="btn subtle" data-kit-qr="${k.id}">QR du kit</button><button class="btn subtle" data-kit-check="${k.id}">Contrôler</button><button class="btn subtle" data-kit-edit="${k.id}">Modifier</button><button class="btn subtle" data-kit-delete="${k.id}">Supprimer</button><button class="btn subtle" data-printkit="${k.id}">Fiche PDF</button></div></article>`}).join('') : '<div class="empty">Aucun sac ou kit. Crée un kit pour regrouper ton matériel.</div>';
+  kits.forEach(ensureKitBarcode);
+  $('#kits').innerHTML=kits.length?kits.map(k=>{const entries=kitEntries(k),units=entries.reduce((n,e)=>n+e.qty,0);return `<article class="item-card"><div class="item-meta"><span class="pill">SAC / KIT</span><span class="pill">${entries.length} référence(s) · ${units} unité(s)</span></div><h3>${esc(k.name)}</h3><p>${esc(k.location||'Emplacement non renseigné')}<br>${esc(k.description||'')}<br>${entries.map(e=>{const x=items.find(i=>i.id===e.itemId);return x?`${esc(x.name)} × ${e.qty}`:''}).filter(Boolean).join(' · ')}</p><div class="card-actions"><button class="btn subtle" data-kit-barcode="${k.id}">Code-barres du kit</button><button class="btn subtle" data-kit-check="${k.id}">Contrôler</button><button class="btn subtle" data-kit-edit="${k.id}">Modifier</button><button class="btn subtle" data-kit-delete="${k.id}">Supprimer</button><button class="btn subtle" data-printkit="${k.id}">Fiche PDF</button></div></article>`}).join('') : '<div class="empty">Aucun sac ou kit. Crée un kit pour regrouper ton matériel.</div>';
 }
 function renderTravel(){
+  travel.forEach(ensureTravelBarcode);
   const list=$('#travelList');
   if(!travel.length){ list.innerHTML='<p class="muted small">Aucun scénario. Crée un « mat d\'emats » pour te préparer une journée.</p>'; return; }
-  list.innerHTML = travel.map(t=>`<article class="item-card travel-card"><div class="item-meta"><span class="pill">TOURNAGE</span><span class="pill ${esc(t.status||'draft')}">${esc(travelStatusNames[t.status||'draft'])}</span></div><div><h3>${esc(t.name)}</h3><p>${esc(t.notes||'')}</p><p class="muted small">${(t.needs||[]).map(n=>esc(n.label)+' ×'+(n.qty||1)).join(' · ')||'Aucun besoin renseigné'}</p></div><div class="card-actions"><button class="btn subtle" data-travel-prepare="${t.id}">Préparer</button><button class="btn subtle" data-travel-qr="${t.id}">QR scénario</button><button class="btn subtle" data-travel-edit="${t.id}">Éditer</button><button class="btn subtle" data-travel-delete="${t.id}">Supprimer</button></div></article>`).join('');
+  list.innerHTML = travel.map(t=>`<article class="item-card travel-card"><div class="item-meta"><span class="pill">TOURNAGE</span><span class="pill ${esc(t.status||'draft')}">${esc(travelStatusNames[t.status||'draft'])}</span></div><div><h3>${esc(t.name)}</h3><p>${esc(t.notes||'')}</p><p class="muted small">${(t.needs||[]).map(n=>esc(n.label)+' ×'+(n.qty||1)).join(' · ')||'Aucun besoin renseigné'}</p></div><div class="card-actions"><button class="btn subtle" data-travel-prepare="${t.id}">Préparer</button><button class="btn subtle" data-travel-barcode="${t.id}">Code-barres scénario</button><button class="btn subtle" data-travel-edit="${t.id}">Éditer</button><button class="btn subtle" data-travel-delete="${t.id}">Supprimer</button></div></article>`).join('');
 }
 function renderLoans(){
   const list=$('#loanList');
@@ -195,55 +200,46 @@ function publicToken(){return crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xx
 function renderOwnerSelect(){const el=$('#itemOwner');if(!el)return;const current=$('#itemForm')?.elements.ownerId?.value||'';el.innerHTML='<option value="">Propriétaire non renseigné</option>'+owners.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}${o.organization?' · '+esc(o.organization):''}</option>`).join('');el.value=current;}
 function tagPrefix(item){const c=String(item.category||'MAT').toUpperCase();const words=c.normalize('NFD').replace(/[\u0300-\u036f]/g,'').match(/[A-Z0-9]+/g)||['MAT'];return words.map(w=>w[0]).join('').slice(0,3)||'MAT';}
 function newUnitTag(item){const used=new Set(items.flatMap(x=>(x.units||[]).map(u=>u.tag)));let tag;do{tag='#'+tagPrefix(item)+'-'+Math.random().toString(36).slice(2,7).toUpperCase();}while(used.has(tag));return tag;}
-function ensureItemUnits(item){const qty=Math.max(1,Number(item.quantity)||1);if(!Array.isArray(item.units))item.units=[];while(item.units.length<qty){const token=publicToken();item.units.push({id:token,token,tag:newUnitTag(item)});}if(item.units.length>qty)item.units=item.units.slice(0,qty);item.units.forEach(u=>{if(!u.token)u.token=u.id||uid();if(!u.id)u.id=u.token;if(!u.tag)u.tag=newUnitTag(item);if(u.ownerId===undefined)u.ownerId=item.ownerId||'';});return item.units;}
+function ensureItemUnits(item){const qty=Math.max(1,Number(item.quantity)||1);if(!Array.isArray(item.units))item.units=[];while(item.units.length<qty){const token=publicToken();item.units.push({id:token,token,tag:newUnitTag(item)});}if(item.units.length>qty)item.units=item.units.slice(0,qty);item.units.forEach(u=>{if(!u.token)u.token=u.id||uid();if(!u.id)u.id=u.token;if(!u.tag)u.tag=newUnitTag(item);if(u.ownerId===undefined)u.ownerId=item.ownerId||'';if(!u.barcode)u.barcode='CA-'+String(u.tag).replace(/^#/,'');});return item.units;}
+function ensureKitBarcode(kit){if(!kit.barcode)kit.barcode='CA-KIT-'+String(kit.id||uid()).replace(/[^a-z0-9]/gi,'').slice(-10).toUpperCase();return kit.barcode;}
+function ensureTravelBarcode(entry){if(!entry.barcode)entry.barcode='CA-TRV-'+String(entry.id||uid()).replace(/[^a-z0-9]/gi,'').slice(-10).toUpperCase();return entry.barcode;}
 let editingOwnerId=null;
 function renderOwners(){const box=$('#ownerList');if(!box)return;box.innerHTML=owners.length?owners.map(o=>`<article class="owner-row"><div><strong>${esc(o.name)}</strong><small>${esc(o.organization||'')}${o.phone?' · '+esc(o.phone):''}${o.email?' · '+esc(o.email):''}</small></div><span><button class="btn subtle small" data-owner-edit="${esc(o.id)}">Modifier</button> <button class="btn subtle small" data-owner-delete="${esc(o.id)}">Supprimer</button></span></article>`).join(''):'<p class="muted small">Aucun propriétaire enregistré.</p>';}
 $('#manageOwnersBtn')?.addEventListener('click',()=>{renderOwners();$('#ownersDialog').showModal();});
 $('#ownerForm')?.addEventListener('submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.currentTarget).entries());const o={id:editingOwnerId||uid(),name:d.name.trim(),organization:d.organization.trim(),phone:d.phone.trim(),email:d.email.trim(),showPhone:$('#ownerShowPhone').checked,showEmail:$('#ownerShowEmail').checked};if(!o.name)return;owners=editingOwnerId?owners.map(x=>x.id===editingOwnerId?o:x):[...owners,o];editingOwnerId=null;e.currentTarget.reset();$('#ownerForm button[type=submit]').textContent='Ajouter le propriétaire';renderOwners();renderOwnerSelect();saveAll();});
 $('#ownerList')?.addEventListener('click',e=>{const edit=e.target.closest('[data-owner-edit]');if(edit){const o=ownerById(edit.dataset.ownerEdit);if(!o)return;editingOwnerId=o.id;for(const k of ['name','organization','phone','email'])$('#ownerForm').elements[k].value=o[k]||'';$('#ownerShowPhone').checked=!!o.showPhone;$('#ownerShowEmail').checked=!!o.showEmail;$('#ownerForm button[type=submit]').textContent='Enregistrer les modifications';return;}const b=e.target.closest('[data-owner-delete]');if(!b)return;if(!confirm('Supprimer ce propriétaire ? Les matériels associés ne seront pas supprimés.'))return;owners=owners.filter(o=>o.id!==b.dataset.ownerDelete);items=items.map(x=>x.ownerId===b.dataset.ownerDelete?{...x,ownerId:''}:x);renderOwners();renderOwnerSelect();saveAll();});
 $('#closeOwners')?.addEventListener('click',()=>{editingOwnerId=null;$('#ownerForm').reset();$('#ownerForm button[type=submit]').textContent='Ajouter le propriétaire';$('#ownersDialog').close();});
-async function openLabels(prefillId=''){renderOwnerSelect();const base=$('#labelBaseUrl');if(base)base.value=localStorage.getItem('caverne_portal_base')||'';const list=$('#labelSelection');if(!list)return;if(getSyncSession()?.access_token)await syncNow('auto');const all=[];items.forEach(item=>ensureItemUnits(item).forEach((unit,index)=>all.push({item,unit,index})));persistAll();if(getSyncSession()?.access_token)await syncNow('auto');list.innerHTML=all.length?all.map(({item,unit,index})=>`<div class="label-choice"><input type="checkbox" value="${esc(item.id)}::${esc(unit.token)}" ${prefillId===item.id?'checked':''}><span><b>${esc(item.name)}</b><small>${esc(unit.tag)} · exemplaire ${index+1}/${item.units.length}</small></span><select class="label-owner" data-unit-owner="${esc(item.id)}::${esc(unit.token)}"><option value="">Propriétaire non renseigné</option>${owners.map(o=>`<option value="${esc(o.id)}" ${unit.ownerId===o.id?'selected':''}>${esc(o.name)}</option>`).join('')}</select></div>`).join(''):'<p class="muted">Aucun matériel à étiqueter.</p>';if(!prefillId)list.querySelectorAll('input[type=checkbox]').forEach(x=>x.checked=false);$('#labelsDialog').showModal();}
+async function openLabels(prefillId=''){
+  renderOwnerSelect();
+  const list=$('#labelSelection');if(!list)return;
+  items.forEach(ensureItemUnits);persistAll();
+  const all=[];items.forEach(item=>ensureItemUnits(item).forEach((unit,index)=>all.push({item,unit,index})));
+  list.innerHTML=all.length?all.map(({item,unit,index})=>`<div class="label-choice"><input type="checkbox" value="${esc(item.id)}::${esc(unit.token)}" ${prefillId===item.id?'checked':''}><span><b>${esc(item.name)}</b><small>${esc(unit.tag)} · ${esc(unit.barcode)} · exemplaire ${index+1}/${item.units.length}</small></span></div>`).join(''):'<p class="muted">Aucun matériel à étiqueter.</p>';
+  if(!prefillId)list.querySelectorAll('input[type=checkbox]').forEach(x=>x.checked=false);
+  $('#labelsDialog').showModal();
+}
 $('#printLabelsBtn')?.addEventListener('click',()=>openLabels());
-$('#labelSelection')?.addEventListener('change',e=>{const sel=e.target.closest('[data-unit-owner]');if(!sel)return;const [itemId,token]=sel.dataset.unitOwner.split('::');const item=items.find(x=>x.id===itemId),unit=item?.units?.find(x=>x.token===token);if(unit){unit.ownerId=sel.value;persistAll();if(getSyncSession()?.access_token)syncNow('auto');}});
 $('#labelSelectAll')?.addEventListener('click',()=>$('#labelSelection').querySelectorAll('input[type=checkbox]').forEach(x=>x.checked=true));
 $('#labelSelectNone')?.addEventListener('click',()=>$('#labelSelection').querySelectorAll('input[type=checkbox]').forEach(x=>x.checked=false));
 $('#closeLabels')?.addEventListener('click',()=>$('#labelsDialog').close());$('#closeLabels2')?.addEventListener('click',()=>$('#labelsDialog').close());
-function makePublicLabelUrl(unit,item,base,cfg){const u=new URL('contact.html',base.endsWith('/')?base:base+'/');u.searchParams.set('id',unit.token);u.searchParams.set('project',cfg.url);u.searchParams.set('key',cfg.key);return u.toString();}
-async function publishAndPrintLabels(){
+function printSelectedBarcodeLabels(){
   const selected=[...$('#labelSelection').querySelectorAll('input:checked')];
   if(!selected.length)return alert('Sélectionne au moins un exemplaire à imprimer.');
-  const base=$('#labelBaseUrl').value.trim();
-  if(!/^https:\/\//i.test(base))return alert('Saisis l’adresse HTTPS du site publié (GitHub Pages).');
-  localStorage.setItem('caverne_portal_base',base);
-  // Ouvrir la fenêtre pendant le geste utilisateur pour éviter le blocage des pop-ups après le réseau.
-  const printWindow=window.open('','_blank');
-  if(!printWindow)return alert('Autorise les fenêtres surgissantes pour préparer la planche.');
+  const printWindow=window.open('','_blank');if(!printWindow)return alert('Autorise les fenêtres surgissantes pour préparer la planche.');
   try{
-    const cfg=getSyncConfig(),session=await ensureSyncSession(cfg);
-    if(!cfg.url||!cfg.key||!session?.access_token)throw Error('Connecte-toi à Supabase dans Exports & impressions avant de publier les fiches QR.');
-    const records=[],labels=[];
-    for(const checkbox of selected){
-      const [itemId,token]=checkbox.value.split('::');
-      const item=items.find(x=>x.id===itemId),unit=item?.units?.find(x=>x.token===token);
-      if(!item||!unit)continue;
-      const owner=ownerById(unit.ownerId===undefined?item.ownerId:unit.ownerId);
-      records.push({id:unit.token,owner_id:session.user.id,tag:unit.tag,item_name:item.name,brand:item.brand||'',model:item.model||'',owner_name:owner?.name||'',organization:owner?.organization||'',phone:owner?.showPhone?owner.phone:'',email:owner?.showEmail?owner.email:'',updated_at:new Date().toISOString()});
-      labels.push({item,unit,url:makePublicLabelUrl(unit,item,base,cfg)});
-    }
+    const labels=[];
+    for(const checkbox of selected){const [itemId,token]=checkbox.value.split('::');const item=items.find(x=>x.id===itemId),unit=item?.units?.find(x=>x.token===token);if(item&&unit){unit.barcode=unit.barcode||('CA-'+String(unit.tag).replace(/^#/,''));labels.push({item,unit});}}
     if(!labels.length)throw Error('Aucun exemplaire valide dans la sélection.');
-    const selectedOwner=x=>{const u=x.item.units.find(z=>z.token===x.unit.token);return ownerById(u?.ownerId===undefined?x.item.ownerId:u?.ownerId);};
-    const withoutOwner=labels.filter(x=>!selectedOwner(x));
-    const withoutContact=labels.filter(x=>{const o=selectedOwner(x);return o&&!((o.showPhone&&o.phone)||(o.showEmail&&o.email));});
-    const warnings=[];if(withoutOwner.length)warnings.push(`${withoutOwner.length} exemplaire(s) sans propriétaire associé`);if(withoutContact.length)warnings.push(`${withoutContact.length} exemplaire(s) sans moyen de contact rendu public`);
-    if(warnings.length&&!confirm(warnings.join(' et ')+'. Les fiches afficheront les informations disponibles. Continuer ?')){printWindow.close();return;}
-    const r=await fetch(cfg.url.replace(/\/$/,'')+'/rest/v1/caverne_public_labels',{method:'POST',headers:{'apikey':cfg.key,'Authorization':'Bearer '+session.access_token,'Content-Type':'application/json','Accept':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(records)});
-    if(!r.ok)throw Error('Publication des fiches : HTTP '+r.status+'. Vérifie que le SQL des étiquettes publiques a été exécuté.');
-    printLabelSheet(labels,$('#labelFormat').value,printWindow);
-    $('#labelsDialog').close();
+    persistAll();printLabelSheet(labels,$('#labelFormat').value,printWindow);$('#labelsDialog').close();
   }catch(err){if(!printWindow.closed)printWindow.close();alert('Impossible de préparer les étiquettes : '+err.message);}
 }
-$('#printSelectedLabels')?.addEventListener('click',publishAndPrintLabels);
-function printLabelSheet(labels,format,w){const sizes={'mini':{w:25,h:25,qr:20,tag:5.2,name:0},'compact':{w:35,h:25,qr:19,tag:6.5,name:6.5},'standard':{w:45,h:30,qr:22,tag:7,name:7}};const z=sizes[format]||sizes.mini;const html=labels.map(({item,unit,url})=>{const qr=makeQR(url);return `<div class="label"><img src="${qr}" alt="QR"><div class="tag">${esc(unit.tag)}</div>${z.name?`<div class="name">${esc(item.name)}</div>`:''}</div>`;}).join('');if(!w||w.closed)return alert('La fenêtre d’impression a été fermée.');w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquettes La Caverne d’Alibaab</title><style>@page{size:A4;margin:8mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#111}.sheet{display:grid;grid-template-columns:repeat(auto-fill,${z.w}mm);grid-auto-rows:${z.h}mm;gap:2mm;align-content:start;justify-content:start}.label{width:${z.w}mm;height:${z.h}mm;border:.2mm dashed #bbb;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:.6mm;background:white;break-inside:avoid}.label img{width:${z.qr}mm;height:${z.qr}mm;object-fit:contain;image-rendering:pixelated}.tag{font-weight:800;font-size:${z.tag}pt;line-height:1.05;margin-top:.3mm;white-space:nowrap}.name{font-size:${z.name}pt;line-height:1.05;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media print{.label{border-color:#ddd}}</style></head><body><main class="sheet">${html}</main><script>window.onload=()=>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();}
+$('#printSelectedLabels')?.addEventListener('click',printSelectedBarcodeLabels);
+function printLabelSheet(labels,format,w){
+  const sizes={mini:{w:35,h:18,barcode:29,tag:5.5,name:5.2},compact:{w:45,h:22,barcode:39,tag:6.5,name:6},standard:{w:55,h:25,barcode:48,tag:7.2,name:6.8}};const z=sizes[format]||sizes.compact;
+  const html=labels.map(({item,unit})=>{return `<div class="label"><img src="${Code128Barcode.dataUri(unit.barcode)}" alt="Code-barres"><div class="tag">${esc(unit.tag)}</div><div class="name">${esc(item.name)}</div></div>`;}).join('');
+  if(!w||w.closed)return alert('La fenêtre d’impression a été fermée.');
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquettes Code 128 — La Caverne d’Alibaab</title><style>@page{size:A4;margin:8mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#111}.sheet{display:grid;grid-template-columns:repeat(auto-fill,${z.w}mm);grid-auto-rows:${z.h}mm;gap:2mm;align-content:start;justify-content:start}.label{width:${z.w}mm;height:${z.h}mm;border:.2mm dashed #bbb;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:.5mm;background:white;break-inside:avoid}.label img{display:block;width:${z.barcode}mm;height:auto;max-height:9mm;object-fit:contain}.tag{font-weight:800;font-size:${z.tag}pt;line-height:1;margin-top:.1mm;white-space:nowrap}.name{font-size:${z.name}pt;line-height:1.05;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media print{.label{border-color:#ddd}}</style></head><body><main class="sheet">${html}</main><script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);w.document.close();
+}
 
 function qrLink(id){ return String(id); }
 function makeQR(value){ const qr=new QRCodeLib(0,0); qr.addData(String(value)); qr.make(); const count=qr.getModuleCount(), scale=10, margin=6, canvas=document.createElement('canvas'); canvas.width=canvas.height=(count+margin*2)*scale; const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#111';for(let r=0;r<count;r++)for(let c=0;c<count;c++)if(qr.isDark(r,c))ctx.fillRect((c+margin)*scale,(r+margin)*scale,scale,scale);return canvas.toDataURL('image/png'); }
@@ -253,16 +249,16 @@ document.addEventListener('click', async (e)=>{
   const edit=e.target.closest('[data-edit]'); if(edit){ openEdit(edit.dataset.edit); return; }
   const del=e.target.closest('[data-delete]'); if(del){ if(confirm('Supprimer définitivement cette fiche ?')){ items=items.filter(x=>x.id!==del.dataset.delete); kits=kits.map(k=>({...k,items:(k.items||[]).filter(entry=>(typeof entry==='string'?entry:(entry.itemId||entry.id))!==del.dataset.delete)})); saveAll(); } return; }
   const labelItem=e.target.closest('[data-label-item]');if(labelItem){openLabels(labelItem.dataset.labelItem);return;}
-  const qr=e.target.closest('[data-qr]'); if(qr){ const x=items.find(i=>i.id===qr.dataset.qr); const data=makeQR(qrLink(x.id)); $('#qrTitle').textContent=x.name; $('#qrImage').src=data; $('#qrDialog').showModal(); return; }
+  const barcode=e.target.closest('[data-barcode]'); if(barcode){ const x=items.find(i=>i.id===barcode.dataset.barcode); if(x){ensureItemUnits(x);const unit=x.units[0];$('#qrTitle').textContent=x.name+' · '+unit.tag;$('#printQRBtn').textContent='Imprimer le code-barres';$('#qrImage').src=Code128Barcode.dataUri(unit.barcode);$('#qrImage').alt='Code-barres '+unit.barcode;$('#qrDialog').showModal();} return; }
   const pr=e.target.closest('[data-print]'); if(pr){ const x=items.find(i=>i.id===pr.dataset.print); printItems([x],true); return; }
   const prl=e.target.closest('[data-printloan]'); if(prl){ const l=loans.find(x=>x.id===prl.dataset.printloan); if(l) printLoan(l); return; }
   const ke=e.target.closest('[data-kit-edit]');if(ke){const k=kits.find(x=>x.id===ke.dataset.kitEdit);if(k){editingKitId=k.id;$('#kitDialogTitle').textContent='Modifier le kit';$('#kitForm').reset();$('#kitRows').innerHTML='';$('#kitForm').elements.name.value=k.name||'';$('#kitForm').elements.location.value=k.location||'';$('#kitForm').elements.description.value=k.description||'';kitEntries(k).forEach(entry=>{addKitItemRow();const row=$('#kitRows').lastElementChild;row.querySelector('.kit-item-select').value=entry.itemId;row.querySelector('.kit-item-qty').value=entry.qty;});if(!kitEntries(k).length)addKitItemRow();$('#kitDialog').showModal();}return;}
-  const kqr=e.target.closest('[data-kit-qr]'); if(kqr){const k=kits.find(x=>x.id===kqr.dataset.kitQr);if(k){$('#qrTitle').textContent='Kit · '+k.name;$('#qrImage').src=makeQR('caverne-alibaab:kit='+k.id);$('#qrDialog').showModal();}return;}
+  const kqr=e.target.closest('[data-kit-barcode]'); if(kqr){const k=kits.find(x=>x.id===kqr.dataset.kitBarcode);if(k){ensureKitBarcode(k);$('#qrTitle').textContent='Kit · '+k.name;$('#printQRBtn').textContent='Imprimer le code-barres';$('#qrImage').src=Code128Barcode.dataUri(k.barcode);$('#qrImage').alt='Code-barres '+k.barcode;persistAll();$('#qrDialog').showModal();}return;}
   const kcheck=e.target.closest('[data-kit-check]'); if(kcheck){const k=kits.find(x=>x.id===kcheck.dataset.kitCheck);if(k){openKitCheck(k,scannerMode==='return'?'return':scannerMode==='depart'?'depart':'inspect');}return;}
   const kd=e.target.closest('[data-kit-delete]'); if(kd){ if(confirm('Supprimer ce kit ?')){ kits=kits.filter(k=>k.id!==kd.dataset.kitDelete); saveAll(); } return; }
   const pk=e.target.closest('[data-printkit]'); if(pk){ const k=kits.find(x=>x.id===pk.dataset.printkit); if(k) printKit(k); return; }
   const tp=e.target.closest('[data-travel-prepare]'); if(tp){const t=travel.find(x=>x.id===tp.dataset.travelPrepare);if(t){t.status='ready';const missing=[];(t.needs||[]).forEach(n=>{const obj=items.find(i=>n.itemId&&i.id===n.itemId)||items.find(i=>i.name.trim().toLowerCase()===String(n.label||'').trim().toLowerCase());if(!obj){missing.push(n.label);return;}const q=departureQueue.find(z=>z.itemId===obj.id);if(q)q.qty+=Math.max(1,Number(n.qty)||1);else departureQueue.push({itemId:obj.id,name:obj.name,qty:Math.max(1,Number(n.qty)||1),status:'assigned'});});if(missing.length)alert('Besoins à associer à un équipement de l’inventaire :\n'+missing.join('\n'));saveAll();if(departureQueue.length){populateDeparture();$('#departureDialog').showModal();}}return;}
-  const tq=e.target.closest('[data-travel-qr]'); if(tq){const t=travel.find(x=>x.id===tq.dataset.travelQr);if(t){$('#qrTitle').textContent='Scénario · '+t.name;$('#qrImage').src=makeQR('caverne-alibaab:travel='+t.id);$('#qrDialog').showModal();}return;}
+  const tq=e.target.closest('[data-travel-barcode]'); if(tq){const t=travel.find(x=>x.id===tq.dataset.travelBarcode);if(t){ensureTravelBarcode(t);$('#qrTitle').textContent='Scénario · '+t.name;$('#printQRBtn').textContent='Imprimer le code-barres';$('#qrImage').src=Code128Barcode.dataUri(t.barcode);$('#qrImage').alt='Code-barres '+t.barcode;persistAll();$('#qrDialog').showModal();}return;}
   const td=e.target.closest('[data-travel-edit]'); if(td){ const t=travel.find(x=>x.id===td.dataset.travelEdit); if(t){ editingTravelId=t.id; resetTravel(); $('#travelDialogTitle').textContent='Modifier le scénario'; $('#travelForm').elements.name.value=t.name||''; $('#travelForm').elements.notes.value=t.notes||''; (t.needs||[]).forEach(n=>addTravelItemRow(n)); $('#travelDialog').showModal(); } return; }
   const rev=e.target.closest('[data-travel-delete]'); if(rev){ if(confirm('Supprimer ce scénario ?')){ travel=travel.filter(x=>x.id!==rev.dataset.travelDelete); saveAll(); } return; }
   const ld=e.target.closest('[data-loan-edit]'); if(ld){ const l=loans.find(x=>x.id===ld.dataset.loanEdit); if(l){ editingLoanId=l.id; refreshLoanOptions(); resetLoan(); $('#loanDialogTitle').textContent='Modifier la location'; for(const k of ['client','firstname','contact','startDate','endDate','objectif']) $('#loanForm').elements[k].value=l[k]||''; const sel=$('#loanItemsSelect'); const mapped=(l.items||[]).map(it=>({...it,itemId:it.itemId||items.find(x=>x.name===it.name)?.id||''})); [...sel.options].forEach(o=>o.selected=mapped.some(it=>it.itemId===o.value)); fillLoanRows(); mapped.forEach(it=>{let r=[...$('#loanRows').children].find(row=>row.dataset.itemId===it.itemId);if(!r){r=document.createElement('div');r.className='loan-row';r.dataset.itemId=it.itemId||'';r.innerHTML=`<input class="loan-name" value="${esc(it.name||'Matériel') }" ${it.itemId?'disabled':''} style="flex:1"><input class="loan-qty" type="number" min="1" value="1" style="width:80px"><button type="button" class="btn subtle small">✕</button>`;$('#loanRows').appendChild(r);r.querySelector('button').onclick=()=>r.remove();}r.querySelector('.loan-qty').value=it.qty||1;}); $('#loanDialog').showModal(); } return; }
@@ -272,7 +268,7 @@ document.addEventListener('click', async (e)=>{
 });
 
 $('#closeQR')?.addEventListener('click',()=>$('#qrDialog').close());
-$('#printQRBtn')?.addEventListener('click',()=>{const w=window.open('','_blank');if(!w)return alert('Autorise les fenêtres surgissantes pour imprimer le QR.');w.document.write(`<!doctype html><html><head><title>${esc($('#qrTitle').textContent)}</title><style>body{font-family:Arial;text-align:center;padding:30px}img{width:420px;height:420px;object-fit:contain;image-rendering:pixelated}h2{font-size:20px}</style></head><body><h2>${esc($('#qrTitle').textContent)}</h2><img src="${$('#qrImage').src}"><script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();});
+$('#printQRBtn')?.addEventListener('click',()=>{const w=window.open('','_blank');if(!w)return alert('Autorise les fenêtres surgissantes pour imprimer le code.');w.document.write(`<!doctype html><html><head><title>${esc($('#qrTitle').textContent)}</title><style>body{font-family:Arial;text-align:center;padding:30px}img{width:min(90vw,600px);height:auto;max-height:65vh;object-fit:contain}h2{font-size:20px}</style></head><body><h2>${esc($('#qrTitle').textContent)}</h2><img src="${$('#qrImage').src}"><script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();});
 
 // ---------- tabs ----------
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
@@ -295,12 +291,16 @@ $('#restoreBtn').onclick=()=>$('#restoreFile').click();
 $('#restoreFile').onchange=async e=>{ const f=e.target.files[0]; if(!f)return; try{ const data=JSON.parse(await f.text()); if(!Array.isArray(data.items))throw Error('Fichier non reconnu'); if(confirm('Restaurer cette sauvegarde remplacera les données de cet appareil. Continuer ?')){ items=data.items||[]; kits=data.kits||[]; travel=data.travel||[]; loans=data.loans||[]; movements=data.movements||[]; owners=data.owners||[]; saveAll(); } }catch(err){ alert('Sauvegarde invalide : '+err.message); } e.target.value=''; };
 function download(name,content,type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([content],{type})); a.download=name; a.click(); URL.revokeObjectURL(a.href); }
 function csv(){
-  const cols=['name','category','brand','model','serial','quantity','status','reason','location','holder','loanDate','dueDate','price','purchaseDate','warranty','condition','notes'];
+  const cols=['name','category','brand','model','serial','quantity','stockQty','loanedQty','unavailableQty','status','reason','location','holder','loanDate','dueDate','price','purchaseDate','warranty','condition','barcodes','tags','notes'];
   const q=v=>'"'+String(v??'').replace(/\"/g,'""')+'"';
-  download('caverne-alibaab-inventaire.csv', [
-    cols.join(';'),
-    ...items.map(x=>cols.map(k=>k==='status'?statusNames[x[k]]:k==='reason'?reasonNames[x[k]]:x[k])).join(';')
-  ].join('\r\n'),'text/csv;charset=utf-8');
+  const rows=items.map(x=>{ensureItemUnits(x);return cols.map(k=>{
+    if(k==='status')return q(statusNames[displayStatus(x)]||x.status);
+    if(k==='reason')return q(reasonNames[x[k]]||x[k]);
+    if(k==='barcodes')return q((x.units||[]).map(u=>u.barcode).join(' | '));
+    if(k==='tags')return q((x.units||[]).map(u=>u.tag).join(' | '));
+    return q(x[k]);
+  }).join(';');});
+  download('caverne-alibaab-inventaire.csv',[cols.map(q).join(';'),...rows].join('\r\n'),'text/csv;charset=utf-8');
 }
 function printItems(list,individual=false){
   const html=list.map(x=>`<article class="sheet"><header><h1>LA CAVERNE D’ALIBAAB</h1><b>FICHE MATÉRIEL</b></header>${x.photo?`<img class="photo" src="${x.photo}">`:''}<h2>${esc(x.name)}</h2><p class="category">${esc(x.category)} · ${statusNames[x.status]}</p><table>${[['Marque',x.brand],['Modèle',x.model],['N° de série',x.serial],['Quantité',x.quantity],['Emplacement',x.location],['Détenteur',x.holder],['Retour prévu',x.dueDate],['Prix d’achat',x.price?x.price+' €':''],['Date d’achat',x.purchaseDate],['Garantie',x.warranty],['État physique',x.condition],['Notes',x.notes]].filter(r=>r[1]).map(r=>`<tr><th>${r[0]}</th><td>${esc(r[1])}</td></tr>`).join('')}</table><p class="serial">Identifiant : ${esc(x.id)}</p></article>`).join('');
@@ -380,22 +380,39 @@ $('#closeDeparture').onclick=$('#cancelDeparture').onclick=()=>$('#departureDial
 
 // ---------- scanner ----------
 let scanner=null, scannerMode='scan', scannerActive=false, scanAudioContext=null, kitCheck=null;
+let keyboardScanBuffer='', keyboardScanLastAt=0;
 function initScanner(){
   document.querySelectorAll('.mode-btn[data-mode]').forEach(b=>b.onclick=()=>setScannerMode(b.dataset.mode));
+  // Les lecteurs USB/Bluetooth en mode clavier envoient le code puis Entrée.
+  document.addEventListener('keydown',event=>{
+    if($('#scannerView')?.hidden)return;
+    if(event.target?.closest('input,textarea,select,[contenteditable="true"]'))return;
+    const now=Date.now();
+    if(event.key==='Enter'){
+      const value=keyboardScanBuffer;keyboardScanBuffer='';keyboardScanLastAt=0;
+      if(value.length>=5){event.preventDefault();onScanSuccess(value);}
+      return;
+    }
+    if(event.key.length===1 && event.key.charCodeAt(0)>=32 && event.key.charCodeAt(0)<=126){
+      if(now-keyboardScanLastAt>100)keyboardScanBuffer='';
+      keyboardScanBuffer+=event.key;keyboardScanLastAt=now;
+      if(keyboardScanBuffer.length>100)keyboardScanBuffer=keyboardScanBuffer.slice(-100);
+    }
+  });
   $('#scanToggle').onclick=async()=>{ if(!scannerActive) await unlockScanFeedback(); scannerActive?stopScanner():startScanner(); };
 }
 function setScannerMode(mode){
   scannerMode=mode;
   document.querySelectorAll('.mode-btn[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
-  const labels={scan:'Scanner un QR de garantie ou une étiquette pour associer / ouvrir une fiche.',depart:'Scanner les équipements à sortir : ils seront ajoutés à une liste à valider.',return:'Scanner les équipements rendus : leur statut repassera en stock.'};
+  const labels={scan:'Scanner un code-barres ou un ancien QR pour associer / ouvrir une fiche.',depart:'Scanner les équipements à sortir : ils seront ajoutés à une liste à valider.',return:'Scanner les équipements rendus : leur statut repassera en stock.'};
   $('#scanModeLabel').textContent=labels[mode]||'';
 }
 async function startScanner(){
   if(scannerActive)return;
   $('#scanContainer').hidden=false; $('#scanError').hidden=true;
   try{
-    scanner=new Html5Qrcode('scanContainer');
-    await scanner.start({facingMode:'environment'},{fps:10,qrbox:(w,h)=>({width:Math.min(260,w-30),height:Math.min(260,h-30)}),aspectRatio:1.0},onScanSuccess,()=>{});
+    scanner=new Html5Qrcode('scanContainer',{formatsToSupport:[Html5QrcodeSupportedFormats.CODE_128,Html5QrcodeSupportedFormats.QR_CODE]});
+    await scanner.start({facingMode:'environment'},{fps:10,qrbox:(w,h)=>({width:Math.min(420,w-30),height:Math.min(240,h-30)}),aspectRatio:1.6},onScanSuccess,()=>{});
     scannerActive=true; $('#scanToggle').textContent='Arrêter la caméra'; $('#scanStatus').textContent='Caméra prête.';
   }catch(err){ scanner=null; $('#scanError').textContent='Impossible de lancer la caméra. Sur iPhone, ouvre l’app depuis Safari ou l’écran d’accueil et autorise l’accès à la caméra. '+(err?.message||''); $('#scanError').hidden=false; }
 }
@@ -417,7 +434,7 @@ function findItemByScannedCode(value){
   return items.find(x=>
     x.id===parseItemFromScannedText(code)||
     (publicLabelId&&Array.isArray(x.units)&&x.units.some(unit=>unit.token===publicLabelId||unit.id===publicLabelId))||
-    x.qrCode===code||x.serial===code||x.barcode===code||x.externalQr===code
+    x.qrCode===code||x.serial===code||x.barcode===code||x.externalQr===code||(x.units||[]).some(unit=>unit.barcode===code||unit.tag===code||unit.token===code||unit.id===code)
   );
 }
 async function unlockScanFeedback(){
@@ -442,27 +459,27 @@ function onScanSuccess(decodedText){
     if(line.scanned>=line.required){label.textContent=`Quantité déjà complète pour ${checkedItem.name} (${line.required}/${line.required}).`;return;}
     line.scanned++;scanFeedback();renderKitCheck();label.textContent=`✓ ${checkedItem.name} · ${line.scanned}/${line.required}`;addScanLog(`${kitCheck.mode==='return'?'Retour':'Contrôle'} kit : ${checkedItem.name} ${line.scanned}/${line.required}`,'ok');return;
   }
-  const kitId=parseKitFromScannedText(safe), scannedKit=kits.find(k=>k.id===kitId);
+  const scannedKitByBarcode=kits.find(k=>k.barcode===safe);const kitId=parseKitFromScannedText(safe), scannedKit=scannedKitByBarcode||kits.find(k=>k.id===kitId);
   if(scannedKit){scanFeedback();openKitCheck(scannedKit,scannerMode==='return'?'return':scannerMode==='depart'?'depart':'inspect');label.textContent=`Kit « ${scannedKit.name} » : contrôle détaillé ouvert.`;addScanLog('Kit : '+scannedKit.name,'ok');return;}
   if(scannerMode==='scan'){
-    const travelId=parseTravelFromScannedText(safe), scenario=travel.find(t=>t.id===travelId);
+    const travelId=parseTravelFromScannedText(safe), scenario=travel.find(t=>t.barcode===safe||t.id===travelId);
     if(scenario){const missing=[];let added=0;(scenario.needs||[]).forEach(n=>{const found=items.find(i=>n.itemId&&i.id===n.itemId)||items.find(i=>i.name.trim().toLowerCase()===String(n.label||'').trim().toLowerCase());if(found){const queued=departureQueue.find(q=>q.itemId===found.id);if(queued)queued.qty+=Math.max(1,Number(n.qty)||1);else departureQueue.push({itemId:found.id,name:found.name,qty:Math.max(1,Number(n.qty)||1),status:'assigned'});added++;}else missing.push(n.label);});label.textContent=`Scénario « ${scenario.name} » : ${added} équipement(s) ajouté(s) à la préparation.`;$('#scanResults').innerHTML=`<p><strong>${scenario.name}</strong> · ${added} ajouté(s)${missing.length?' · '+missing.length+' besoin(s) à associer':''}</p><button class="btn primary" id="openDepartureQueue">Vérifier la préparation</button>`;$('#openDepartureQueue').onclick=()=>{populateDeparture();$('#departureDialog').showModal();};addScanLog('Scénario : '+scenario.name,'ok');return;}
   }
   const x=findItemByScannedCode(safe);
   if(scannerMode==='scan'){
     if(x){scanFeedback();openEdit(x.id);label.textContent=`Fiche ouverte : ${x.name}`;addScanLog('✓ '+x.name,'ok');}
     else {
-      const choice=prompt('QR code reconnu mais non associé.\nColle ce code dans la fiche d’un matériel existant ou saisis le nom du matériel à créer.\n\nCode : '+safe+'\n\nNom du matériel (laisser vide pour ignorer) :');
+      const choice=prompt('Code reconnu mais non associé.\nColle ce code dans la fiche d’un matériel existant ou saisis le nom du matériel à créer.\n\nCode : '+safe+'\n\nNom du matériel (laisser vide pour ignorer) :');
       if(choice){const name=choice.trim();if(name){const existing=items.find(i=>i.name.toLowerCase()===name.toLowerCase());if(existing){existing.externalQr=safe;saveAll();label.textContent=`QR associé à ${existing.name}`;addScanLog('QR associé : '+existing.name,'ok');}else{if(confirm(`Créer une fiche « ${name} » avec ce QR ?`)){editingId=null;resetForm();$('#itemForm').elements.name.value=name;$('#itemForm').elements.externalQr.value=safe;$('#itemDialog').showModal();}}}}
       else {label.textContent='QR mémorisé non associé : '+safe.slice(0,70);addScanLog('? '+safe.slice(0,70),'unknown');}
     }
   }else if(scannerMode==='depart'){
-    if(!x){label.textContent='QR non associé à un équipement. Passe en mode SCAN pour l’associer.';addScanLog('? '+safe.slice(0,60),'unknown');return;}
+    if(!x){label.textContent='Code non associé à un équipement. Passe en mode SCAN pour l’associer.';addScanLog('? '+safe.slice(0,60),'unknown');return;}
     const queued=departureQueue.find(q=>q.itemId===x.id);const already=Number(queued?.qty)||0;const max=Math.max(0,Number(x.stockQty??(x.status==='stock'?x.quantity:0))||0);if(max<=0){label.textContent=`Aucune unité disponible en stock pour ${x.name}.`;return;}if(already>=max){label.textContent=`Quantité maximale atteinte pour ${x.name} (${max}).`;return;}if(queued)queued.qty=already+1;else departureQueue.push({itemId:x.id,name:x.name,qty:1,status:'assigned'});scanFeedback();label.textContent=`✓ ${x.name} · ${queued?'quantité scannée mise à jour':'ajouté à la liste'} (${(queued?.qty)||1} / ${max}).`;addScanLog('+ '+x.name+' · '+(queued?.qty||1)+' scanné(s)','ok');
     $('#scanResults').innerHTML=`<p><strong>${departureQueue.length}</strong> matériel(s) dans la liste de départ.</p><button class="btn primary" id="openDepartureQueue">Vérifier et valider le départ</button>`;
     $('#openDepartureQueue').onclick=()=>{populateDeparture();$('#departureDialog').showModal();};
   }else if(scannerMode==='return'){
-    if(!x){label.textContent='QR non associé à un équipement.';return;}
+    if(!x){label.textContent='Code non associé à un équipement.';return;}
     scanFeedback();
     const previousHolder=x.holder||'';ensureItemQtyState(x);const qty=Math.min(1,Number(x.loanedQty)||0);if(qty<=0){label.textContent=`Aucune unité de ${x.name} n’est actuellement déclarée sortie.`;return;}x.loanedQty=Math.max(0,(Number(x.loanedQty)||0)-qty);x.stockQty=(Number(x.stockQty)||0)+qty;syncItemLegacyStatus(x);
     registerLoanReturn(x.id,qty);
@@ -473,7 +490,7 @@ function onScanSuccess(decodedText){
 function openKitCheck(kit,mode='depart'){
   kitCheck={kit,mode,lines:kitEntries(kit).map(entry=>{const item=items.find(i=>i.id===entry.itemId);return {itemId:entry.itemId,name:item?.name||'Matériel supprimé',required:entry.qty,scanned:0,missing:!item};}).filter(x=>!x.missing)};
   renderKitCheck();$('#kitCheckTitle').textContent=(mode==='return'?'Retour du kit · ':mode==='depart'?'Départ du kit · ':'Contenu du kit · ')+kit.name;
-  $('#kitCheckHint').textContent=mode==='return'?'Scanne chaque élément rendu, ou ajuste les quantités manuellement.':mode==='depart'?'Scanne chaque élément à sortir, ou ajuste les quantités manuellement.':'Scanne les QR des éléments pour vérifier leur présence, ou ajuste les quantités manuellement.';
+  $('#kitCheckHint').textContent=mode==='return'?'Scanne chaque code-barres rendu, ou ajuste les quantités manuellement.':mode==='depart'?'Scanne chaque code-barres à sortir, ou ajuste les quantités manuellement.':'Scanne les codes-barres (ou anciens QR) des éléments pour vérifier leur présence, ou ajuste les quantités manuellement.';
   $('#kitCheckDialog').showModal();
 }
 function renderKitCheck(){

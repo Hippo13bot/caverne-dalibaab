@@ -1,7 +1,7 @@
 {
   "name": "caverne-dalibaab",
-  "version": "1.5.2",
-  "description": "La caverne d'Alibaab : inventaire de matériel audiovisuel et informatique (bureau + iPhone)",
+  "version": "1.6.0",
+  "description": "Gestion professionnelle de parc matériel audiovisuel, prêts, kits et inventaire avec codes-barres Code 128",
   "main": "src/main.js",
   "author": "La caverne d'Alibaab",
   "license": "MIT",

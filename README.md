@@ -4,24 +4,27 @@ Inventaire de matériel audiovisuel, photo, son, informatique et accessoires. Un
 
 ## Fonctionnalités
 - Inventaire avec fiches, photos, catégories, numéros de série, quantités, statuts, garanties, emplacement et notes.
-- Sacs et kits avec QR dédié, contrôle détaillé ligne par ligne, quantités par équipement et fiche PDF par contenant.
+- Sacs et kits avec code-barres Code 128 dédié, contrôle détaillé ligne par ligne, quantités par équipement et fiche PDF par contenant.
 - Scanner avec confirmation sonore (après activation par le bouton caméra), vibration si le navigateur et le téléphone la prennent en charge, anti-double-scan et compteur par unité.
-- QR internes plus compacts, plus grands à l’impression et plus faciles à lire.
-- Scanners caméra avec trois modes : **SCAN**, **DÉPART** et **RETOUR**. Les QR fabricant / garantie peuvent être associés aux fiches et réutilisés.
+- Codes-barres Code 128 uniques par exemplaire et par kit ; les anciens QR restent reconnus pendant la transition.
+- Scanners caméra ou lecteur USB/Bluetooth en mode clavier, avec trois modes : **SCAN**, **DÉPART** et **RETOUR**. Les QR fabricant / garantie peuvent être associés aux fiches et réutilisés.
 - Départs validés par scan, changement d'état des équipements, historique des mouvements et bordereau PDF avec coordonnées du bénéficiaire et dates.
 - Locations avec client, prénom, contact, dates, matériel sélectionné, quantités sorties et retours partiels suivis.
 - Scénarios de tournage avec besoins associés à l’inventaire, quantités et action de préparation directe.
 - OCR de plaque signalétique pour proposer marque, modèle et numéro de série (connexion internet requise ; vérification humaine nécessaire).
 - Export CSV, sauvegarde/restauration JSON, fiches PDF individuelles et inventaire.
-- Propriétaires multiples avec association à chaque exemplaire physique ; hashtags et QR uniques pour chaque unité, même lorsque plusieurs objets partagent la même référence.
-- Impression de planches A4 à la sélection, en formats 25 × 25 mm, 35 × 25 mm et 45 × 30 mm ; page publique de contact après scan avec téléphone/e-mail affichés uniquement sur autorisation.
-- Configuration des étiquettes QR : exécuter `docs/ETIQUETTES-QR.sql` une fois dans Supabase ; publier les fiches sélectionnées depuis « Exports & impressions ».
+- Propriétaires multiples avec association à chaque exemplaire physique ; hashtags et identifiants Code 128 uniques pour chaque unité, même lorsque plusieurs objets partagent la même référence.
+- Impression locale de planches A4 Code 128 à la sélection, en formats 35 × 18 mm, 45 × 22 mm et 55 × 25 mm ; aucun compte ou appel Supabase requis pour imprimer.
+- Les nouveaux codes-barres sont stockés dans les données de chaque exemplaire ; aucune migration SQL n’est requise. Les anciennes fiches QR publiques continuent de fonctionner.
 - Stockage local IndexedDB pour rester utilisable hors ligne.
 - Synchronisation périodique Mac ↔ iPhone via Supabase, avec compte utilisateur et règles RLS.
 - Portail web public de demandes de prêt pour clients et collègues : dépôt sans compte avec lien privé de suivi, ou création de compte et historique personnel.
 - Validation manuelle dans l’application : accepter (création d’un prêt), refuser ou proposer des modifications. Le portail ne peut jamais confirmer seul une réservation ni modifier l’inventaire.
 - Catalogue public limité aux noms, catégories, modèles, quantités disponibles et compositions des kits ; aucune donnée privée de l’inventaire n’est exposée.
 - Configuration du portail : exécuter `docs/PORTAIL-DEMANDES.sql` après `docs/SUPABASE.sql`, publier le catalogue depuis l’onglet « Demandes en ligne », puis renseigner l’URL GitHub Pages et partager le lien généré.
+
+## Attribution
+- This product includes software developed by Tyler C. Sarna (Code 128 symbol-pattern table).
 
 ## Identité
 - Mascotte GIF animée dans l'application.
@@ -38,8 +41,8 @@ Inventaire de matériel audiovisuel, photo, son, informatique et accessoires. Un
 1. Pousse le dépôt sur GitHub.
 2. Dans **Actions**, lance « Compiler l'app Mac et Windows » ou crée un tag de version :
    ```bash
-   git tag v1.5.0
-   git push origin v1.5.0
+   git tag v1.6.0
+   git push origin v1.6.0
    ```
 3. Télécharge les installateurs dans les artefacts du workflow ou dans la Release.
 
@@ -68,6 +71,11 @@ Puis ouvre `http://localhost:8000`. La caméra et le service worker nécessitent
 - Ne mets jamais la clé `service_role` dans l'application ; utilise uniquement la clé publique. Les données synchronisées contiennent potentiellement des coordonnées de clients : protège l'accès à ton compte.
 - L'OCR lit les inscriptions d'une plaque, mais ne garantit pas l'identification visuelle automatique d'un appareil.
 
+
+### Version 1.6.0 — étiquettes Code 128 et scanner mixte
+- Codes-barres Code 128 générés localement pour chaque exemplaire et chaque kit.
+- Planches A4 compactes sans connexion Supabase ni publication de données personnelles.
+- Scanner compatible Code 128 + anciens QR ; les données existantes et les anciennes étiquettes restent compatibles.
 
 ### Version 1.5.2 — correction du scanner des étiquettes publiques
 - Le scanner intégré reconnaît maintenant les QR publics `contact.html` et retrouve automatiquement l’exemplaire correspondant. Le même QR sert à la gestion interne et à la fiche publique de contact.

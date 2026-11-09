@@ -67,7 +67,7 @@
       </article>
       <article class="panel">
         <h3>Journées & mouvements</h3>
-        <p class="muted">Entrée / sortie enregistrée du matériel, avec justificatif (scan QR).</p>
+        <p class="muted">Entrée / sortie enregistrée du matériel, avec identification par code-barres ou ancien QR.</p>
         <div class="toolbar" style="margin-bottom:10px"><input id="movementDate" type="date"></div>
         <div id="movementList"></div>
       </article>
@@ -84,7 +84,7 @@
   <!-- SCANNERS -->
   <section id="scannerView" hidden>
     <div class="section-head-row">
-      <div><h2>Scanners</h2><p class="muted">Scanne les QR de garantie déjà présents : associe-les à une fiche, puis réutilise-les en départ et retour.</p></div>
+      <div><h2>Scanners</h2><p class="muted">Scanne les nouveaux codes-barres Code 128 ou les anciens QR codes : associe-les à une fiche, puis réutilise-les en départ et retour.</p></div>
     </div>
     <div class="scanner-card">
       <div class="scan-toolbar">
@@ -92,6 +92,7 @@
         <div class="scan-status" id="scanStatus">Prêt. <span id="scanModeLabel">Scanner une étiquette.</span></div>
         <button class="btn subtle" id="scanToggle">Lancer la caméra ▸</button>
       </div>
+      <p class="muted small">Tu peux utiliser la caméra ou un lecteur Code 128 USB/Bluetooth configuré en mode clavier (il envoie le code puis Entrée).</p>
       <div id="scanContainer" class="scan-container" hidden></div>
       <div id="scanError" class="scan-error" hidden></div>
       <div class="scan-results" id="scanResults"></div>
@@ -105,7 +106,7 @@
   <!-- EXPORTS -->
   <section id="exportsView" hidden>
     <div class="section-head"><div><h2>Exports & impressions</h2><p class="muted">Prépare tes fiches d'inventaire, les fiches par sac et les PDF de départ.</p></div></div>
-    <article class="panel sync-panel"><h3>Étiquettes QR du matériel (PDF)</h3><p>Sélectionne les exemplaires à étiqueter, choisis le format mini, compact ou confort, puis imprime ou enregistre la planche A4 au format PDF.</p><div class="sync-actions"><button class="btn primary" id="printLabelsBtn">Préparer une planche d’étiquettes</button><button class="btn subtle" id="manageOwnersBtn">Gérer les propriétaires</button></div></article>
+    <article class="panel sync-panel"><h3>Étiquettes Code 128 du matériel</h3><p>Imprime un code-barres unique par exemplaire, en format mini, compact ou confort. Les codes sont lus par le scanner intégré et les lecteurs USB/Bluetooth.</p><div class="sync-actions"><button class="btn primary" id="printLabelsBtn">Préparer une planche d’étiquettes</button><button class="btn subtle" id="manageOwnersBtn">Gérer les propriétaires</button></div></article>
     <div class="export-grid">
       <article class="panel"><h3>Inventaire complet</h3><p>Imprime ou enregistre un PDF récapitulatif de tous les équipements.</p><button class="btn primary" id="printAllBtn">Imprimer l'inventaire</button></article>
       <article class="panel"><h3>Une fiche PDF par objet</h3><p>Ouvre une impression avec une page dédiée par équipement. Choisis « Enregistrer au format PDF ».</p><button class="btn primary" id="printEachBtn">Préparer les fiches individuelles</button></article>
@@ -222,10 +223,11 @@
 
 <dialog id="ownersDialog"><div class="dialog-form"><div class="dialog-head"><div><p class="eyebrow">CONTACTS PUBLICS</p><h2>Propriétaires du matériel</h2></div><button type="button" class="close" id="closeOwners">✕</button></div><p class="muted small">Les coordonnées cochées seront visibles par toute personne qui scanne l’étiquette. N’ajoute que les informations que tu acceptes de rendre publiques.</p><form id="ownerForm"><div class="form-grid"><label>Nom affiché *<input name="name" required placeholder="Jean Dupont"></label><label>Société / association<input name="organization" placeholder="La Caverne d’Alibaab"></label><label>Téléphone<input name="phone" type="tel" placeholder="06…"></label><label>E-mail<input name="email" type="email" placeholder="contact@exemple.fr"></label></div><div class="check-row"><label><input id="ownerShowPhone" type="checkbox"> Afficher le téléphone publiquement</label><label><input id="ownerShowEmail" type="checkbox"> Afficher l’e-mail publiquement</label></div><div class="dialog-actions"><button class="btn primary" type="submit">Ajouter le propriétaire</button></div></form><h3>Propriétaires enregistrés</h3><div id="ownerList"></div></div></dialog>
 
-<dialog id="labelsDialog"><div class="dialog-form"><div class="dialog-head"><div><p class="eyebrow">IMPRESSION A4</p><h2>Préparer les étiquettes QR</h2></div><button type="button" class="close" id="closeLabels">✕</button></div><p class="muted small">Chaque exemplaire reçoit un hashtag unique. Le QR ouvre une fiche publique permettant d’identifier le propriétaire et de le contacter.</p><label>Adresse du site publié (GitHub Pages)<input id="labelBaseUrl" type="url" placeholder="https://...github.io/.../"></label><label>Format des étiquettes<select id="labelFormat"><option value="mini">Mini — 25 × 25 mm (petits objets / tables)</option><option value="compact">Compact — 35 × 25 mm (QR + hashtag + nom)</option><option value="standard">Confort — 45 × 30 mm (QR + hashtag + nom)</option></select></label><div class="label-select-actions"><b>Exemplaires à imprimer</b><span><button type="button" class="btn subtle small" id="labelSelectAll">Tout sélectionner</button> <button type="button" class="btn subtle small" id="labelSelectNone">Tout désélectionner</button></span></div><div id="labelSelection" class="label-selection"></div><p class="muted small">Avant la première impression, exécute une fois docs/ETIQUETTES-QR.sql dans Supabase > SQL Editor. Les fiches QR sélectionnées seront ensuite publiées dans Supabase avant l’impression. Le téléphone et l’e-mail n’apparaîtront que si tu as coché leur affichage dans la fiche du propriétaire.</p><div class="dialog-actions"><button type="button" class="btn subtle" id="closeLabels2">Annuler</button><button type="button" class="btn primary" id="printSelectedLabels">Publier & imprimer la planche A4</button></div></div></dialog>
+<dialog id="labelsDialog"><div class="dialog-form"><div class="dialog-head"><div><p class="eyebrow">IMPRESSION A4</p><h2>Préparer les étiquettes Code 128</h2></div><button type="button" class="close" id="closeLabels">✕</button></div><p class="muted small">Chaque exemplaire reçoit un code-barres Code 128 unique, lisible par le scanner de l’application et par un lecteur USB/Bluetooth. Aucun compte Supabase ni adresse web n’est nécessaire pour imprimer.</p><label>Format des étiquettes<select id="labelFormat"><option value="mini">Mini — 35 × 18 mm</option><option value="compact" selected>Compact — 45 × 22 mm</option><option value="standard">Confort — 55 × 25 mm</option></select></label><div class="label-select-actions"><b>Exemplaires à imprimer</b><span><button type="button" class="btn subtle small" id="labelSelectAll">Tout sélectionner</button> <button type="button" class="btn subtle small" id="labelSelectNone">Tout désélectionner</button></span></div><div id="labelSelection" class="label-selection"></div><p class="muted small">Les anciens QR codes restent scannables. Les nouvelles étiquettes sont destinées à l’identification interne : elles ne publient aucune coordonnée personnelle.</p><div class="dialog-actions"><button type="button" class="btn subtle" id="closeLabels2">Annuler</button><button type="button" class="btn primary" id="printSelectedLabels">Imprimer la planche A4</button></div></div></dialog>
 
-<dialog id="qrDialog"><div class="dialog-form qr-content"><div class="dialog-head"><h2 id="qrTitle">QR matériel</h2><button type="button" class="close" id="closeQR">✕</button></div><img id="qrImage" alt="QR code du matériel"><p class="muted">Ce QR ouvre la fiche, le kit ou le scénario correspondant. Imprime-le et appose-le sur le matériel ou le contenant.</p><button type="button" class="btn primary" id="printQRBtn">Imprimer le QR</button></div></dialog>
+<dialog id="qrDialog"><div class="dialog-form qr-content"><div class="dialog-head"><h2 id="qrTitle">QR matériel</h2><button type="button" class="close" id="closeQR">✕</button></div><img id="qrImage" alt="Code ou QR du matériel"><p class="muted">Ce QR ouvre la fiche, le kit ou le scénario correspondant. Imprime-le et appose-le sur le matériel ou le contenant.</p><button type="button" class="btn primary" id="printQRBtn">Imprimer le code</button></div></dialog>
 <script src="qr.js"></script>
+<script src="barcode.js"></script>
 <script src="vendor/html5-qrcode.min.js"></script>
 <script src="app.js"></script>
 </body>
