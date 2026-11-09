@@ -1,12 +1,12 @@
-## 1.9.0 — EAN-13 + QR anti-perte
+## 1.9.0 — QR objet + QR anti-perte
 
-- Chaque exemplaire reçoit un EAN-13 interne valide (préfixe 20–29) et un identifiant public court. Le chiffre de contrôle est calculé conformément à EAN-13 ; ces numéros ne sont pas des codes commerciaux GS1.
-- Migration additive : les anciens codes Code 128 sont conservés dans `unit.barcode` et restent reconnus par le scanner. Les anciens QR `contact.html?id=...&project=...&key=...` restent compatibles.
-- Nouvelle étiquette EAN-13 monochrome, avec numéro lisible, et seconde étiquette QR avec nom d’objet, référence et mention « SCANNEZ SI PERDU ».
-- Impression directe FICHERO en raster natif 96 × 240 points ; le QR trop dense est refusé plutôt que d’être imprimé illisible.
-- Scanner caméra : prise en charge EAN-13, Code 128 et QR.
-- Page publique commune compatible avec les identifiants courts `?i=...` et les anciens liens.
-- Migration Supabase additive fournie dans `docs/ETIQUETTES-QR.sql`. Configuration publique courte documentée dans `docs/UPGRADE-1.9.0.md`.
+- Plus de code-barres : l'étiquette 1 est un seul gros QR noir sur fond blanc, sans texte, qui encode une référence courte `CA-XXXXXXXX` (11 caractères → QR version 1, 21 × 21 modules, module de 4 points sur la tête native 96 points).
+- Étiquette 2 inchangée dans son principe : QR anti-perte vers la page publique commune `contact.html?i=XXXXXXXX`, nom de l'objet (jamais la marque), référence courte et « SCANNEZ SI PERDU ».
+- Impression directe FICHERO en paire : QR objet puis QR anti-perte, en une seule action, raster natif 96 × 240 points sans interpolation. Un QR trop dense est refusé plutôt qu'imprimé illisible.
+- Scanner : lit `CA-XXXXXXXX`, les QR anti-perte, les anciens QR et, pour compatibilité, EAN-13 et Code 128. Zone de lecture caméra désormais carrée.
+- Migration additive : aucune donnée supprimée. Les EAN-13 déjà attribués (`unit.ean13`), les Code 128 (`unit.barcode`), les anciens tags, UUID et liens `contact.html?id=...` restent reconnus. Aucun nouvel EAN-13 n'est généré.
+- Nouveau fichier `src/label-codes.js` ; `src/ean13.js` retiré (plus utilisé). Nouveau test `tests/object-qr.test.js`.
+- Migration Supabase additive : `docs/ETIQUETTES-QR.sql` (la colonne `ean13` reste facultative).
 
 ## 1.8.3
 - Code-barres raccourci à la référence unique de l’exemplaire, centré et rendu sans étirement.

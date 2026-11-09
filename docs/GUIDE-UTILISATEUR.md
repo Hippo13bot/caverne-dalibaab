@@ -14,8 +14,8 @@ Ouvre l'application installée. La caméra doit être autorisée dans Réglages 
 - Le champ **QR / code-barres existant** permet de conserver le contenu du QR fabricant.
 - Dans **Scanners ▸ SCAN**, scanne une étiquette existante. Si elle n'est pas encore liée, saisis le nom exact d'une fiche existante pour associer le code, ou crée une nouvelle fiche.
 - Les scans suivants ouvrent directement la fiche liée.
-- Chaque exemplaire reçoit automatiquement un EAN-13 interne unique (préfixe 20–29) et une référence courte pour son QR anti-perte. L’EAN-13 est enregistré avec l’unité et synchronisé avec les données existantes. Les Code 128 historiques restent conservés pour la compatibilité et les kits/scénarios.
-- Les anciens QR codes et QR fabricant restent scannables : le scanner accepte EAN-13, Code 128 et QR Code.
+- Chaque exemplaire reçoit automatiquement une référence courte unique (8 caractères). Elle sert au QR d’identification (`CA-XXXXXXXX`) et au QR anti-perte ; elle est enregistrée avec l’unité et synchronisée.
+- Les anciens QR codes et QR fabricant restent scannables : le scanner accepte les QR codes, ainsi que les anciens EAN-13 et Code 128.
 
 ## Départs et retours
 - **DÉPART** : scanne chaque équipement. Il apparaît dans une liste de contrôle. Vérifie les quantités et valide le départ pour mettre les fiches en statut **Emprunté / sorti**, renseigner le détenteur et générer le bordereau PDF.
@@ -70,7 +70,7 @@ Le bouton **Rechercher par photo** utilise l'OCR pour lire les inscriptions d'un
 
 Lors de la création d’un sac ou d’un kit, ajoute chaque référence de matériel puis indique le nombre d’exemplaires réellement présents dans ce contenant. La fiche PDF du kit reprend cette quantité (et non la quantité totale de l’inventaire). Les codes-barres de kits sont ajoutés automatiquement aux kits existants sans changer leur composition. Les anciens QR de kits restent scannables. Les anciens kits restent compatibles : chaque matériel déjà présent dans un ancien kit est considéré comme une unité.
 
-## Scanner (EAN-13, Code 128 et QR)
+## Scanner (QR, anciens EAN-13 et Code 128)
 
 Au démarrage de la caméra, l’application déverrouille l’audio à partir du toucher sur le bouton. Chaque scan reconnu déclenche ensuite un bip. Les QR des étiquettes publiques (liens `contact.html`) sont également reconnus directement par le scanner intégré : l’application extrait automatiquement le jeton de l’exemplaire et ouvre la fiche matériel correspondante en mode SCAN, ou traite le matériel en mode DÉPART / RETOUR. Une vibration est demandée si le navigateur expose l’API correspondante ; certains navigateurs iOS ne permettent pas la vibration depuis une page web. En mode DÉPART, la quantité scannée est limitée au stock disponible. Les QR fabricant existants restent reconnus lorsqu’ils sont associés à une fiche. Un lecteur USB/Bluetooth en mode clavier est aussi accepté dans l’onglet Scanners : il suffit de scanner le code et de laisser le lecteur envoyer Entrée.
 
@@ -87,12 +87,12 @@ Les demandeurs peuvent déposer une demande sans compte : le lien privé affich�
 
 **Sécurité :** seule la clé publique Supabase (`sb_publishable_…` ou clé anon) est incluse dans le lien. Ne jamais utiliser `service_role`. Les demandes ne sont pas accessibles publiquement : le suivi invité exige un jeton secret, et l’espace de gestion exige le compte propriétaire.
 
-## Étiquettes EAN-13 + QR anti-perte (version 1.9.0)
+## Étiquettes QR objet + QR anti-perte (version 1.9.0)
 
 1. Avant le premier tirage, exécute la migration `docs/ETIQUETTES-QR.sql` dans Supabase et configure `src/public-config.js` comme indiqué dans `docs/UPGRADE-1.9.0.md`.
-2. Dans **Étiquettes**, sélectionne les exemplaires à imprimer. Chaque exemplaire reçoit un EAN-13 interne unique et une référence courte.
-3. Utilise **Imprimer les 2 directement** pour envoyer automatiquement à la FICHERO D11s, à la suite : l'étiquette EAN-13 puis l'étiquette QR anti-perte.
-4. La première étiquette contient uniquement le code EAN-13 et son numéro lisible. La seconde contient le QR, le nom du matériel, sa référence et « SCANNEZ SI PERDU ».
+2. Dans **Étiquettes**, sélectionne les exemplaires à imprimer. Chaque exemplaire possède une référence courte unique.
+3. Utilise **Imprimer les 2 directement** pour envoyer automatiquement à la FICHERO D11s, à la suite : le QR objet puis le QR anti-perte.
+4. La première étiquette contient uniquement un gros QR, sans texte. La seconde contient le QR anti-perte, le nom du matériel, sa référence et « SCANNEZ SI PERDU ».
 5. Le QR ouvre la page publique commune. Seuls le nom du matériel et les coordonnées explicitement autorisées par le propriétaire y sont affichés.
 
-Le scanner intégré reconnaît les EAN-13, les anciens Code 128 et les QR déjà posés. Les anciens liens QR `contact.html?id=...&project=...&key=...` restent compatibles. L'EAN-13 utilise la plage interne 20–29 : ce n'est pas un code commercial GS1. La FICHERO refuse les QR trop denses pour le rouleau 30 × 14 mm au lieu de les imprimer dans une taille qui compromettrait la lecture.
+Le scanner intégré reconnaît les QR objet, les QR anti-perte, les anciens EAN-13, les anciens Code 128 et les QR déjà posés. Les anciens liens QR `contact.html?id=...&project=...&key=...` restent compatibles.

@@ -1,7 +1,7 @@
 {
   "name": "La caverne d'Alibaab",
   "short_name": "Alibaab",
-  "description": "Inventaire de matériel audiovisuel avec étiquettes EAN-13 internes, QR anti-perte, scanner, locations et synchronisation.",
+  "description": "Inventaire de matériel audiovisuel avec étiquettes QR internes, QR anti-perte, scanner, locations et synchronisation.",
   "lang": "fr",
   "start_url": "./index.html",
   "scope": "./",

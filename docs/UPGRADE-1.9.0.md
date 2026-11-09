@@ -1,11 +1,11 @@
-# Passage à la version 1.9.0 — EAN-13 + QR anti-perte
+# Passage à la version 1.9.0 — QR objet + QR anti-perte
 
 ## Ce qui change
 
-- Chaque exemplaire matériel reçoit un EAN-13 valide, généré dans la plage interne 20–29. Il s'agit d'un identifiant privé de parc, pas d'un code commercial GS1.
-- Les identifiants EAN-13 et références publiques courtes sont conservés dans les unités IndexedDB et suivent les synchronisations de l'état de l'application.
+- Chaque exemplaire reçoit une référence courte unique ; elle est encodée dans le QR objet (`CA-XXXXXXXX`, version 1) et dans l'URL du QR anti-perte.
+- Les références publiques courtes (et les EAN-13 déjà attribués) sont conservés dans les unités IndexedDB et suivent les synchronisations de l'état de l'application.
 - Les anciennes valeurs `unit.barcode`, anciens tags et UUID ne sont pas supprimés : le scanner continue à les reconnaître.
-- L'impression d'une paire envoie l'EAN-13 puis le QR anti-perte à la FICHERO D11s.
+- L'impression d'une paire envoie le QR objet puis le QR anti-perte à la FICHERO D11s.
 
 ## Migration Supabase (une fois)
 

@@ -1,11 +1,12 @@
 /* Pilote Bluetooth BLE pour FICHERO D11s / AiYin D11s.
  * Protocole documenté par rétro-ingénierie : service 0x18f0, écriture 0x2af1.
- * Le rendu est envoyé en raster monochrome 96 x 240 px (203 dpi).
+ * Étiquette 1 = QR objet (CA-XXXXXXXX), étiquette 2 = QR anti-perte + nom. Le rendu est envoyé en raster monochrome 96 x 240 px (203 dpi).
  */
 (() => {
   const SERVICE = '000018f0-0000-1000-8000-00805f9b34fb';
   const WRITE = '00002af1-0000-1000-8000-00805f9b34fb';
   const NOTIFY = '00002af0-0000-1000-8000-00805f9b34fb';
+  const HEIGHT_LOGICAL = 96;
   const WIDTH = 96, HEIGHT = 240; // tête native 96 px (14 mm) × avance 240 px (30 mm)
   let device = null, characteristic = null, server = null;
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -64,9 +65,15 @@
       nctx.translate(WIDTH,0);nctx.rotate(Math.PI/2);nctx.imageSmoothingEnabled=false;nctx.drawImage(logical,0,0);
       return toRaster(native);
     };
-    if(type==='barcode'){
-      if(!window.EAN13Barcode?.valid(label.unit?.ean13))throw new Error('EAN-13 absent ou invalide pour '+(label.item?.name||'cet objet'));
-      EAN13Barcode.draw(ctx,label.unit.ean13,{x:3,y:1,moduleWidth:2,barHeight:64,textY:84,fontSize:10,quiet:11});
+    if(type==='object-qr'){
+      // Étiquette 1 : un seul QR noir sur fond blanc, aucun texte, module de 4 points (version 1 = 21 × 21 modules = 84 points).
+      const value=CavernCodes.objectQrValue(label.unit?.publicCode);
+      const qr=new QRCodeLib(0,0);qr.addData(value);qr.make();
+      const count=qr.getModuleCount(),module=Math.floor(92/count),size=count*module;
+      if(size>HEIGHT_LOGICAL)throw new Error('QR objet trop grand pour la tête d’impression.');
+      const qx=Math.floor((240-size)/2),qy=Math.floor((HEIGHT_LOGICAL-size)/2);
+      ctx.fillStyle='#000';
+      for(let r=0;r<count;r++)for(let c=0;c<count;c++)if(qr.isDark(r,c))ctx.fillRect(qx+c*module,qy+r*module,module,module);
       return finish();
     }
     const value=String(label.unit?.publicUrl||'');
@@ -98,13 +105,13 @@
     return raster;
   }
 
-  async function print(labels, type = 'barcode', onProgress = () => {}) {
+  async function print(labels, type = 'pair', onProgress = () => {}) {
     if (!characteristic) await connect();
     const total = labels.length * (type === 'pair' ? 2 : 1);
     if (!labels.length) throw new Error('Aucune étiquette sélectionnée.');
     let current = 0;
     for (let i = 0; i < labels.length; i++) {
-      const types = type === 'pair' ? ['barcode', 'owner-qr'] : [type];
+      const types = type === 'pair' ? ['object-qr', 'owner-qr'] : [type];
       for (const labelType of types) {
       const raster = await drawLabel(labels[i], labelType);
       await write(command(0x10, 0xff, 0x10, 0x00, 0x01)); // densité normale

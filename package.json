@@ -1,7 +1,7 @@
 {
   "name": "caverne-dalibaab",
   "version": "1.9.0",
-  "description": "Gestion de parc matériel avec identifiants EAN-13 internes et étiquettes QR anti-perte",
+  "description": "Gestion de parc matériel avec QR d’identification et QR anti-perte",
   "main": "src/main.js",
   "author": "La caverne d'Alibaab",
   "license": "MIT",
@@ -11,7 +11,7 @@
     "dist:mac": "electron-builder --mac --publish never",
     "dist:win": "electron-builder --win --publish never",
     "dist:all": "electron-builder --mac --win --publish never",
-    "test": "node tests/ean13.test.js && node tests/qr.test.js"
+    "test": "node tests/object-qr.test.js && node tests/qr.test.js"
   },
   "devDependencies": {
     "electron": "^34.3.0",
