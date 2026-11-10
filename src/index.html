@@ -84,7 +84,7 @@
   <!-- SCANNERS -->
   <section id="scannerView" hidden>
     <div class="section-head-row">
-      <div><h2>Scanners</h2><p class="muted">Scanne les QR des objets, les QR anti-perte, les Code 128 des kits/scénarios ou les anciens codes : associe-les à une fiche, puis réutilise-les en départ et retour.</p></div>
+      <div><h2>Scanners</h2><p class="muted">Scanne les QR des objets, des kits et les QR anti-perte : associe-les à une fiche, puis réutilise-les en départ et retour. Les anciennes étiquettes restent compatibles.</p></div>
     </div>
     <div class="scanner-card">
       <div class="scan-toolbar">
@@ -93,6 +93,11 @@
         <button class="btn subtle" id="readerHelp">Connecter un lecteur</button><button class="btn subtle" id="scanToggle">Lancer la caméra ▸</button>
       </div>
       <p class="muted small">Caméra ou lecteur USB, Bluetooth ou Wi-Fi en mode clavier (HID) : associe le lecteur dans les réglages de ton appareil, puis scanne ici. Le lecteur doit envoyer le code suivi de Entrée.</p>
+      <div class="scan-controls" id="scanControls" hidden>
+        <label>Zoom <input id="scanZoom" type="range" min="1" max="1" step="0.1" value="1"><output id="scanZoomValue">1×</output></label>
+        <button class="btn subtle" id="scanTorch" type="button">⚡ Flash : éteint</button>
+        <button class="btn subtle" id="scanFocus" type="button">Mise au point : auto</button>
+      </div>
       <div id="scanContainer" class="scan-container" hidden></div>
       <div id="scanError" class="scan-error" hidden></div>
       <div class="scan-results" id="scanResults"></div>

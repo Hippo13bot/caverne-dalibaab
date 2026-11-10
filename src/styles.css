@@ -96,3 +96,9 @@ input,select,textarea{font-size:16px} /* évite le zoom automatique d'iOS */
 .scan-flash[hidden]{display:none}.scan-flash strong{font-size:clamp(22px,4vw,34px);letter-spacing:.02em}.scan-flash span{font-size:13px;font-weight:700}.scan-flash.success{background:#174b32;border:2px solid #53d68a;color:#d8ffe7}.scan-flash.failure{background:#57241f;border:2px solid #ff7969;color:#ffe2dd}
 @keyframes scan-pop{from{transform:scale(.97);opacity:.4}to{transform:scale(1);opacity:1}}
 @media(prefers-reduced-motion:reduce){.scan-flash{animation:none}}
+
+/* Commandes caméra iPhone */
+.scan-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;margin:10px 0;background:var(--panel, #202629);border:1px solid var(--line);border-radius:12px}
+.scan-controls label{display:flex;align-items:center;gap:9px;flex:1;min-width:190px;font-weight:700;font-size:13px}
+.scan-controls input[type=range]{flex:1;min-width:90px;accent-color:var(--yellow)}
+.scan-controls output{min-width:38px;text-align:right;font-variant-numeric:tabular-nums}

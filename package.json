@@ -1,6 +1,6 @@
 {
   "name": "caverne-dalibaab",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "Gestion de parc matériel avec QR d’identification et QR anti-perte",
   "main": "src/main.js",
   "author": "La caverne d'Alibaab",

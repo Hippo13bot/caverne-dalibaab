@@ -1,3 +1,9 @@
+## 1.9.1 — QR kits + caméra iPhone
+- Les sacs et kits utilisent désormais un QR code dédié, affiché et imprimable depuis leur fiche. Les anciens identifiants Code 128 restent acceptés au scan pour compatibilité.
+- Scanner caméra : commandes de zoom, flash et mise au point continue lorsque le navigateur et l’objectif les exposent.
+- Retour sonore et vibration existants conservés ; lecteur externe Bluetooth/Wi-Fi HID reste compatible.
+- Cache service worker renouvelé.
+
 ## 1.9.0 — QR objet + QR anti-perte
 
 - Mise en page des étiquettes : QR à gauche, texte à droite. Étiquette 1 = gros QR + nom de l'objet, plus le hashtag de l'exemplaire seulement s'il y a plusieurs quantités. Étiquette 2 = QR anti-perte (correction d'erreur L, moins dense) + nom, référence et bandeau « SCANNEZ SI PERDU ». Taille de police ajustée automatiquement. L'impression via fenêtre utilise exactement le même rendu que l'imprimante.

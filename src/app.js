@@ -116,7 +116,7 @@ function kitEntries(kit){const grouped=new Map();(kit.items||[]).forEach(entry=>
 
 function renderKits(){
   kits.forEach(ensureKitBarcode);
-  $('#kits').innerHTML=kits.length?kits.map(k=>{const entries=kitEntries(k),units=entries.reduce((n,e)=>n+e.qty,0);return `<article class="item-card"><div class="item-meta"><span class="pill">SAC / KIT</span><span class="pill">${entries.length} référence(s) · ${units} unité(s)</span></div><h3>${esc(k.name)}</h3><p>${esc(k.location||'Emplacement non renseigné')}<br>${esc(k.description||'')}<br>${entries.map(e=>{const x=items.find(i=>i.id===e.itemId);return x?`${esc(x.name)} × ${e.qty}`:''}).filter(Boolean).join(' · ')}</p><div class="card-actions"><button class="btn subtle" data-kit-barcode="${k.id}">Code-barres du kit</button><button class="btn subtle" data-kit-check="${k.id}">Contrôler</button><button class="btn subtle" data-kit-edit="${k.id}">Modifier</button><button class="btn subtle" data-kit-delete="${k.id}">Supprimer</button><button class="btn subtle" data-printkit="${k.id}">Fiche PDF</button></div></article>`}).join('') : '<div class="empty">Aucun sac ou kit. Crée un kit pour regrouper ton matériel.</div>';
+  $('#kits').innerHTML=kits.length?kits.map(k=>{const entries=kitEntries(k),units=entries.reduce((n,e)=>n+e.qty,0);return `<article class="item-card"><div class="item-meta"><span class="pill">SAC / KIT</span><span class="pill">${entries.length} référence(s) · ${units} unité(s)</span></div><h3>${esc(k.name)}</h3><p>${esc(k.location||'Emplacement non renseigné')}<br>${esc(k.description||'')}<br>${entries.map(e=>{const x=items.find(i=>i.id===e.itemId);return x?`${esc(x.name)} × ${e.qty}`:''}).filter(Boolean).join(' · ')}</p><div class="card-actions"><button class="btn subtle" data-kit-barcode="${k.id}">QR code du kit</button><button class="btn subtle" data-kit-check="${k.id}">Contrôler</button><button class="btn subtle" data-kit-edit="${k.id}">Modifier</button><button class="btn subtle" data-kit-delete="${k.id}">Supprimer</button><button class="btn subtle" data-printkit="${k.id}">Fiche PDF</button></div></article>`}).join('') : '<div class="empty">Aucun sac ou kit. Crée un kit pour regrouper ton matériel.</div>';
 }
 function renderTravel(){
   travel.forEach(ensureTravelBarcode);
@@ -222,7 +222,12 @@ function ensureItemUnits(item){
     if(!u.barcode)u.barcode='CA-'+String(u.tag).replace(/^#/,'');
   });return item.units;
 }
-function ensureKitBarcode(kit){if(!kit.barcode)kit.barcode='CA-KIT-'+String(kit.id||uid()).replace(/[^a-z0-9]/gi,'').slice(-10).toUpperCase();return kit.barcode;}
+function ensureKitBarcode(kit){
+  // Nouvel identifiant QR compact et stable ; l'ancien code-barres reste conservé pour les étiquettes historiques.
+  if(!kit.qrValue)kit.qrValue='caverne-alibaab:kit='+encodeURIComponent(kit.id);
+  if(!kit.barcode)kit.barcode='CA-KIT-'+String(kit.id||uid()).replace(/[^a-z0-9]/gi,'').slice(-10).toUpperCase();
+  return kit.qrValue;
+}
 function ensureTravelBarcode(entry){if(!entry.barcode)entry.barcode='CA-TRV-'+String(entry.id||uid()).replace(/[^a-z0-9]/gi,'').slice(-10).toUpperCase();return entry.barcode;}
 let editingOwnerId=null;
 function renderOwners(){const box=$('#ownerList');if(!box)return;box.innerHTML=owners.length?owners.map(o=>`<article class="owner-row"><div><strong>${esc(o.name)}</strong><small>${esc(o.organization||'')}${o.phone?' · '+esc(o.phone):''}${o.email?' · '+esc(o.email):''}</small></div><span><button class="btn subtle small" data-owner-edit="${esc(o.id)}">Modifier</button> <button class="btn subtle small" data-owner-delete="${esc(o.id)}">Supprimer</button></span></article>`).join(''):'<p class="muted small">Aucun propriétaire enregistré.</p>';}
@@ -352,7 +357,7 @@ document.addEventListener('click', async (e)=>{
   const pr=e.target.closest('[data-print]'); if(pr){ const x=items.find(i=>i.id===pr.dataset.print); printItems([x],true); return; }
   const prl=e.target.closest('[data-printloan]'); if(prl){ const l=loans.find(x=>x.id===prl.dataset.printloan); if(l) printLoan(l); return; }
   const ke=e.target.closest('[data-kit-edit]');if(ke){const k=kits.find(x=>x.id===ke.dataset.kitEdit);if(k){editingKitId=k.id;$('#kitDialogTitle').textContent='Modifier le kit';$('#kitForm').reset();$('#kitRows').innerHTML='';$('#kitForm').elements.name.value=k.name||'';$('#kitForm').elements.location.value=k.location||'';$('#kitForm').elements.description.value=k.description||'';kitEntries(k).forEach(entry=>{addKitItemRow();const row=$('#kitRows').lastElementChild;row.querySelector('.kit-item-select').value=entry.itemId;row.querySelector('.kit-item-qty').value=entry.qty;});if(!kitEntries(k).length)addKitItemRow();$('#kitDialog').showModal();}return;}
-  const kqr=e.target.closest('[data-kit-barcode]'); if(kqr){const k=kits.find(x=>x.id===kqr.dataset.kitBarcode);if(k){ensureKitBarcode(k);$('#qrTitle').textContent='Kit · '+k.name;$('#printQRBtn').textContent='Imprimer le code-barres';$('#qrImage').src=Code128Barcode.dataUri(k.barcode);$('#qrImage').alt='Code-barres '+k.barcode;persistAll();$('#qrDialog').showModal();}return;}
+  const kqr=e.target.closest('[data-kit-barcode]'); if(kqr){const k=kits.find(x=>x.id===kqr.dataset.kitBarcode);if(k){ensureKitBarcode(k);$('#qrTitle').textContent='Kit · '+k.name;$('#printQRBtn').textContent='Imprimer le QR du kit';$('#qrImage').src=makeQR(ensureKitBarcode(k),{margin:2});$('#qrImage').alt='QR code du kit '+k.name;persistAll();$('#qrDialog').showModal();}return;}
   const kcheck=e.target.closest('[data-kit-check]'); if(kcheck){const k=kits.find(x=>x.id===kcheck.dataset.kitCheck);if(k){openKitCheck(k,scannerMode==='return'?'return':scannerMode==='depart'?'depart':'inspect');}return;}
   const kd=e.target.closest('[data-kit-delete]'); if(kd){ if(confirm('Supprimer ce kit ?')){ kits=kits.filter(k=>k.id!==kd.dataset.kitDelete); saveAll(); } return; }
   const pk=e.target.closest('[data-printkit]'); if(pk){ const k=kits.find(x=>x.id===pk.dataset.printkit); if(k) printKit(k); return; }
@@ -500,6 +505,9 @@ function initScanner(){
   });
   $('#readerHelp')?.addEventListener('click',()=>alert('LECTEUR USB / BLUETOOTH / WI-FI\n\n1. Allume le lecteur et active le mode clavier (HID / Keyboard Wedge).\n2. Pour Bluetooth : associe-le dans les réglages Bluetooth de macOS, Windows, iPhone ou iPad.\n3. Pour Wi-Fi : configure le lecteur ou son dongle en mode clavier réseau/HID selon sa notice. Un lecteur Wi-Fi propriétaire qui envoie des données via une application ou un serveur nécessitera son protocole exact.\n4. Ouvre cet onglet SCANNERS, clique dans la page puis scanne. Le lecteur doit envoyer Entrée (ou Tab) après le code.\n\nUn lecteur HID n’a pas besoin d’être appairé depuis La Caverne : le système le présente comme un clavier.'));
   $('#scanToggle').onclick=async()=>{ if(!scannerActive) await unlockScanFeedback(); scannerActive?stopScanner():startScanner(); };
+  $('#scanZoom')?.addEventListener('input',async e=>{const v=Number(e.target.value);$('#scanZoomValue').textContent=v.toFixed(1)+'×';try{await scanner?.applyVideoConstraints({advanced:[{zoom:v}]});}catch(err){$('#scanStatus').textContent='Zoom non pris en charge par cette caméra.';}});
+  $('#scanTorch')?.addEventListener('click',async()=>{try{const enabled=$('#scanTorch').dataset.enabled!=='1';await scanner?.applyVideoConstraints({advanced:[{torch:enabled}]});$('#scanTorch').dataset.enabled=enabled?'1':'0';$('#scanTorch').textContent='⚡ Flash : '+(enabled?'allumé':'éteint');}catch(err){$('#scanStatus').textContent='Flash non disponible sur cette caméra / ce navigateur.';}});
+  $('#scanFocus')?.addEventListener('click',async()=>{try{await scanner?.applyVideoConstraints({advanced:[{focusMode:'continuous'}]});$('#scanFocus').textContent='Mise au point : continue';}catch(err){$('#scanStatus').textContent='Mise au point automatique gérée par la caméra.';}});
 }
 function setScannerMode(mode){
   scannerMode=mode;
@@ -514,11 +522,13 @@ async function startScanner(){
     scanner=new Html5Qrcode('scanContainer',{formatsToSupport:[Html5QrcodeSupportedFormats.QR_CODE,Html5QrcodeSupportedFormats.EAN_13,Html5QrcodeSupportedFormats.CODE_128]});
     await scanner.start({facingMode:'environment'},{fps:18,qrbox:(w,h)=>{const side=Math.max(150,Math.min(300,w-24,h-24));return {width:side,height:side};},aspectRatio:1.333, videoConstraints:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}},onScanSuccess,()=>{});
     scannerActive=true; $('#scanToggle').textContent='Arrêter la caméra'; $('#scanStatus').textContent='Caméra prête.';
+    $('#scanControls').hidden=false;
+    try{const caps=scanner.getRunningTrackCapabilities?.()||{};const zoom=$('#scanZoom');if(caps.zoom){zoom.min=caps.zoom.min||1;zoom.max=caps.zoom.max||4;zoom.step=caps.zoom.step||0.1;zoom.value=zoom.min;$('#scanZoomValue').textContent=Number(zoom.value).toFixed(1)+'×';}else{zoom.disabled=true;$('#scanZoomValue').textContent='non disponible';}}catch(e){}
   }catch(err){ scanner=null; $('#scanError').textContent='Impossible de lancer la caméra. Sur iPhone, ouvre l’app depuis Safari ou l’écran d’accueil et autorise l’accès à la caméra. '+(err?.message||''); $('#scanError').hidden=false; }
 }
 async function stopScanner(){
   if(scanner){try{if(scannerActive)await scanner.stop();scanner.clear();}catch(e){} scanner=null;}
-  scannerActive=false; $('#scanContainer').hidden=true; $('#scanToggle').textContent='Lancer la caméra ▸';
+  scannerActive=false; $('#scanContainer').hidden=true; $('#scanControls').hidden=true; $('#scanToggle').textContent='Lancer la caméra ▸';
 }
 function findItemByScannedCode(value){
   const rawCode=String(value||'').trim();
@@ -568,7 +578,7 @@ function onScanSuccess(decodedText){
     if(line.scanned>=line.required){label.textContent=`Quantité déjà complète pour ${checkedItem.name} (${line.required}/${line.required}).`;return;}
     line.scanned++;scanFeedback();renderKitCheck();label.textContent=`✓ ${checkedItem.name} · ${line.scanned}/${line.required}`;addScanLog(`${kitCheck.mode==='return'?'Retour':'Contrôle'} kit : ${checkedItem.name} ${line.scanned}/${line.required}`,'ok');return;
   }
-  const scannedKitByBarcode=kits.find(k=>k.barcode===safe);const kitId=parseKitFromScannedText(safe), scannedKit=scannedKitByBarcode||kits.find(k=>k.id===kitId);
+  const scannedKitByLegacyCode=kits.find(k=>k.barcode===safe);const kitId=parseKitFromScannedText(safe), scannedKit=scannedKitByLegacyCode||kits.find(k=>k.id===kitId||k.qrValue===safe);
   if(scannedKit){scanFeedback();openKitCheck(scannedKit,scannerMode==='return'?'return':scannerMode==='depart'?'depart':'inspect');label.textContent=`Kit « ${scannedKit.name} » : contrôle détaillé ouvert.`;addScanLog('Kit : '+scannedKit.name,'ok');return;}
   if(scannerMode==='scan'){
     const travelId=parseTravelFromScannedText(safe), scenario=travel.find(t=>t.barcode===safe||t.id===travelId);
