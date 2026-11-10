@@ -125,11 +125,14 @@
     }
     if (type === 'owner-qr') {
       const value = String(label.unit?.publicUrl || '');
-      if (!value) throw new Error('URL publique absente. Publie d’abord la fiche anti-perte.');
-      const qr = makeQr(value, 1); // correction d'erreur L : QR le moins dense possible
+      if (!value) throw new Error('Contenu du QR anti-perte absent.');
+      let qr = null, module = 0; // essaie M puis L et garde le QR qui permet les plus gros points (4 max)
+      for (const level of [0, 1]) {
+        const cand = makeQr(value, level), m = Math.min(4, Math.floor(LH / (cand.getModuleCount() + 2)));
+        if (m > module) { qr = cand; module = m; }
+      }
       const count = qr.getModuleCount();
-      let module = 3; while (module > 2 && (count + 2) * module > LH) module--; // modules de 3 points si l'URL est assez courte, sinon 2
-      if ((count + 2) * module > LH) throw new Error('QR anti-perte trop dense pour le rouleau 30 × 14 mm (' + count + ' modules). Active les QR courts : voir docs/UPGRADE-1.9.0.md.');
+      if (module < 2) throw new Error('QR anti-perte trop dense pour le rouleau 30 × 14 mm (' + count + ' modules). Choisis « Contact direct » dans la fenêtre Étiquettes.');
       const quiet = Math.min(4, Math.floor((LH / module - count) / 2)), total = (count + quiet * 2) * module, qx = Math.floor((LH - total) / 2);
       drawQr(ctx, qr, qx + quiet * module, qx + quiet * module, module);
       const x0 = LH + 2, maxW = LW - x0 - 4, top = 5, area = LH - 10;

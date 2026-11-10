@@ -240,7 +240,27 @@ function selectedLabelUnits(){
   for(const checkbox of selected){const [itemId,token]=checkbox.value.split('::');const item=items.find(x=>x.id===itemId),unit=item?.units?.find(x=>x.token===token);if(item&&unit){if(!unit.publicCode)unit.publicCode=newPublicCode();labels.push({item,unit});}}
   persistAll();return labels;
 }
+function lostQrMode(){return $('#lostQrMode')?.value||localStorage.getItem('caverne_lost_mode')||'direct';}
+function directContactValue(owner){
+  // QR « contact direct » : seulement les coordonnées que le propriétaire a autorisées (showPhone / showEmail).
+  if(owner.showPhone&&String(owner.phone||'').trim()){
+    let d=String(owner.phone).replace(/[^\d+]/g,'');if(d.startsWith('00'))d='+'+d.slice(2);if(/^0\d{9}$/.test(d))d='+33'+d.slice(1);
+    if(d.replace(/\D/g,'').length>=8)return 'tel:'+d;
+  }
+  if(owner.showEmail&&/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(owner.email||'').trim()))return 'mailto:'+String(owner.email).trim();
+  return '';
+}
 async function publishOwnerQrLabels(labels){
+  if(lostQrMode()==='direct'){ // aucune page web, aucun compte Supabase nécessaire : le QR contient directement tel: ou mailto:
+    labels.forEach(({item,unit})=>{
+      const owner=ownerById(unit.ownerId||item.ownerId);
+      if(!owner)throw Error('Aucun propriétaire associé à « '+item.name+' ». Affecte un propriétaire à ce matériel.');
+      const value=directContactValue(owner);
+      if(!value)throw Error('« '+owner.name+' » n’a ni téléphone ni e-mail autorisé. Renseigne-le et active « afficher » pour l’un des deux dans la fiche du propriétaire, ou choisis « Page web » dans la fenêtre Étiquettes.');
+      unit.publicUrl=value;
+    });
+    persistAll();return labels;
+  }
   const cfg=getSyncConfig();
   if(!cfg.url||!cfg.key)throw Error('Configure Supabase dans Exports & impressions avant de publier les QR anti-perte.');
   const session=await ensureSyncSession(cfg);
@@ -257,7 +277,7 @@ async function publishOwnerQrLabels(labels){
   const response=await fetch(url,{method:'POST',headers:{apikey:cfg.key,Authorization:'Bearer '+session.access_token,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
   if(!response.ok)throw Error('Publication Supabase impossible (HTTP '+response.status+'). Vérifie que docs/ETIQUETTES-QR.sql a été exécuté.');
   const publicCfg=window.CAVERNE_PUBLIC_CONFIG||{};const compact=String(publicCfg.supabaseUrl||'').replace(/\/$/,'')===cfg.url.replace(/\/$/,'')&&String(publicCfg.supabaseAnonKey||'')===cfg.key;
-  labels.forEach(({unit})=>{unit.publicUrl=compact?base+'/c.html?'+encodeURIComponent(unit.publicCode):base+'/contact.html?id='+encodeURIComponent(unit.token)+'&project='+encodeURIComponent(cfg.url)+'&key='+encodeURIComponent(cfg.key);});
+  labels.forEach(({unit})=>{unit.publicUrl=compact?base+'/contact.html?i='+encodeURIComponent(unit.publicCode):base+'/contact.html?id='+encodeURIComponent(unit.token)+'&project='+encodeURIComponent(cfg.url)+'&key='+encodeURIComponent(cfg.key);});
   persistAll(); return labels;
 }
 async function printSelectedBarcodeLabels(){
@@ -276,7 +296,7 @@ $('#printDirectFichero')?.addEventListener('click',async()=>{
   const labels=selectedLabelUnits(); if(!labels.length)return alert('Sélectionne au moins un exemplaire à imprimer.');
   const button=$('#printDirectFichero'),status=$('#ficheroPrinterStatus');button.disabled=true;
   try{
-    status.textContent='Préparation des QR anti-perte…'; await publishOwnerQrLabels(labels);
+    status.textContent='Préparation des QR anti-perte…'; await publishOwnerQrLabels(labels); status.textContent='QR anti-perte : '+labels[0].unit.publicUrl;
     status.textContent='Connexion à l’imprimante FICHERO…'; const info=await FicheroPrinter.connect();
     await FicheroPrinter.print(labels,'pair',({current,total})=>{status.textContent='Impression : '+current+' / '+total+' étiquettes…';});
     status.textContent='Terminé : '+(labels.length*2)+' étiquettes ('+labels.length+' paires) envoyées à '+info.name+'.';persistAll();
@@ -302,11 +322,13 @@ async function printSelectedOwnerQrLabels(){
   catch(err){if(!w.closed)w.close();alert('QR anti-perte : '+err.message);}
 }
 $('#printOwnerQrLabels')?.addEventListener('click',printSelectedOwnerQrLabels);
+if($('#lostQrMode'))$('#lostQrMode').value=localStorage.getItem('caverne_lost_mode')||'direct';
+$('#lostQrMode')?.addEventListener('change',e=>localStorage.setItem('caverne_lost_mode',e.target.value));
 $('#copyPublicConfig')?.addEventListener('click',async()=>{
   const cfg=getSyncConfig();if(!cfg.url||!cfg.key)return alert('Configure d’abord Supabase dans Exports & impressions.');
   try{const role=JSON.parse(atob(cfg.key.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).role;if(role==='service_role')return alert('Cette clé est une clé service_role : ne la publie jamais. Utilise la clé anon / publishable.');}catch(e){}
   const text="/* Configuration publique du portail anti-perte (clé anon/publishable uniquement). */\nwindow.CAVERNE_PUBLIC_CONFIG = {\n  supabaseUrl: '"+cfg.url.replace(/\/$/,'')+"',\n  supabaseAnonKey: '"+cfg.key+"'\n};\n";
-  try{await navigator.clipboard.writeText(text);{const b=(localStorage.getItem('caverne_portal_base')||$('#portalBaseUrl')?.value||'').trim().replace(/\/$/,'');const n=b?(b+'/c.html?K7M2XP9Q').length:0;$('#ficheroPrinterStatus').textContent='Contenu de public-config.js copié : colle-le dans src/public-config.js sur GitHub.'+(n?' URL du QR anti-perte : '+n+' caractères'+(n<=53?' → gros modules, lecture très facile.':' → lecture correcte ; sous 54 caractères le QR devient plus gros (adresse GitHub Pages plus courte).'):'');}}
+  try{await navigator.clipboard.writeText(text);$('#ficheroPrinterStatus').textContent='Contenu de public-config.js copié : colle-le dans src/public-config.js sur GitHub.';}
   catch(e){prompt('Copie ce contenu dans src/public-config.js :',text);}
 });
 

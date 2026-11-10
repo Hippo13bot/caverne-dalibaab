@@ -22,7 +22,11 @@ assert.equal(parseObjectQr('https://exemple.fr/contact.html?i=ABCDEFGH'), '');
 assert.throws(() => objectQrValue('ABC'));
 const moduleSize = Math.floor(92 / 21);
 assert.equal(moduleSize, 4); assert.equal(21 * moduleSize, 84); assert.ok(84 <= 96, 'QR objet ≤ tête 96 points');
-const url = 'https://hippo.github.io/La-Caverne-dAlibaab/c.html?ABCDEFGH';
+const url = 'https://hippo.github.io/La-Caverne-dAlibaab/contact.html?i=ABCDEFGH';
 const lost = new ctx.window.QRCodeLib(0, 1); lost.addData(url); lost.make();
 assert.ok((lost.getModuleCount() + 2) * 2 <= 96, 'QR anti-perte court doit tenir sur la tête 96 points');
+for (const v of ['tel:+33612345678', 'mailto:prenom.nom@exemple.fr']) {
+  const q = new ctx.window.QRCodeLib(0, 1); q.addData(v); q.make();
+  assert.ok(q.getModuleCount() <= 29, 'QR contact direct : au plus 29 modules (points de 3 minimum)');
+}
 console.log(`QR objet OK : ${seen.size} valeurs, version 1 (21 modules), module 4 pts = 84 pts / 96. QR anti-perte : ${lost.getModuleCount()} modules.`);
