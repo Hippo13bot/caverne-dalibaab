@@ -96,3 +96,11 @@ Les demandeurs peuvent déposer une demande sans compte : le lien privé affich�
 5. Le QR ouvre la page publique commune. Seuls le nom du matériel et les coordonnées explicitement autorisées par le propriétaire y sont affichés.
 
 Le scanner intégré reconnaît les QR objet, les QR anti-perte, les anciens EAN-13, les anciens Code 128 et les QR déjà posés. Les anciens liens QR `contact.html?id=...&project=...&key=...` restent compatibles.
+
+
+## Synchronisation automatique (Mac, Windows, iPhone)
+
+1. Une seule fois : renseigne `src/public-config.js` (bouton « Copier public-config.js » dans Étiquettes) et déploie. Chaque appareil connaît alors ton projet Supabase.
+2. Sur chaque appareil : Exports & impressions → connexion avec le même e-mail et le même mot de passe.
+3. Ensuite tout est automatique : le voyant en haut affiche « SYNCHRO ✓ » avec l'heure. Hors ligne, les modifications restent sur l'appareil et partent dès le retour du réseau.
+4. Sur iPhone, ouvre l'app depuis l'icône de l'écran d'accueil, pas en navigation privée.

@@ -31,8 +31,15 @@ function openFromHash(){
   if(m){ const id=decodeURIComponent(m[1]); history.replaceState(null,'',location.pathname+location.search); if(items.some(i=>i.id===id)) openEdit(id); else alert("Cette fiche n'existe pas sur cet appareil. Restaure d'abord une sauvegarde."); }
 }
 function saveAll(){ persistAll(); render(); }
+const SYNC_COLLECTIONS=['items','kits','travel','loans','movements','owners'], stampSigs=new Map();
+function stampKey(col,x){return col+':'+(x&&(x.id??x.token)!==undefined?(x.id??x.token):JSON.stringify(x));}
+function stampSig(x){const {_u,...rest}=x||{};return JSON.stringify(rest);}
+function seedStampSigs(){stampSigs.clear();const st={items,kits,travel,loans,movements,owners};for(const c of SYNC_COLLECTIONS)for(const x of st[c]||[])if(x&&typeof x==='object')stampSigs.set(stampKey(c,x),stampSig(x));}
+function stampChanges(now){const st={items,kits,travel,loans,movements,owners};for(const c of SYNC_COLLECTIONS)for(const x of st[c]||[]){if(!x||typeof x!=='object')continue;const k=stampKey(c,x),sig=stampSig(x);if(stampSigs.get(k)!==sig){x._u=now;stampSigs.set(k,stampSig(x));}}}
+let syncTimer=null;function scheduleSync(){clearTimeout(syncTimer);syncTimer=setTimeout(()=>{if(getSyncConfig().url&&navigator.onLine)syncNow('auto');},2500);}
 function persistAll(){
-  stateUpdatedAt=new Date().toISOString(); const state={items,kits,travel,loans,movements,owners,updatedAt:stateUpdatedAt};
+  stateUpdatedAt=new Date().toISOString(); try{stampChanges(stateUpdatedAt);}catch(e){} const state={items,kits,travel,loans,movements,owners,updatedAt:stateUpdatedAt};
+  scheduleSync();
   idb.set('state',state).catch(()=>alert("Enregistrement impossible : espace de stockage plein ? Fais une sauvegarde."));
   try { localStorage.setItem('caverne_alibaab_last_update',state.updatedAt); } catch(e) {}
 }
@@ -61,6 +68,7 @@ const idb = {
     travel = st.travel || []; travel.forEach(ensureTravelBarcode);
     loans = st.loans || [];
     movements = st.movements || []; owners = st.owners || []; stateUpdatedAt=st.updatedAt||stateUpdatedAt;
+    seedStampSigs();
     // Migration additive : mémorise les identifiants créés pour les anciens enregistrements,
     // sans modifier l'horodatage de synchronisation ni écraser une version cloud plus récente.
     await idb.set('state',{...st,items,kits,travel,loans,movements,owners});
@@ -681,13 +689,35 @@ async function runOcrAndSearch(){
 
 // ---------- cloud synchronization (Supabase REST, optional) ----------
 const SYNC_KEY='caverne_alibaab_supabase_config', SESSION_KEY='caverne_alibaab_supabase_session';
-function getSyncConfig(){try{return JSON.parse(localStorage.getItem(SYNC_KEY)||'{}');}catch(e){return {};}}
+function getSyncConfig(){let c={};try{c=JSON.parse(localStorage.getItem(SYNC_KEY)||'{}');}catch(e){}
+  const pc=window.CAVERNE_PUBLIC_CONFIG||{};if((!c.url||!c.key)&&pc.supabaseUrl&&pc.supabaseAnonKey)c={url:pc.supabaseUrl,key:pc.supabaseAnonKey}; // pré-remplissage : il ne reste qu'à se connecter
+  return c;}
 function getSyncSession(){try{return JSON.parse(localStorage.getItem(SESSION_KEY)||'null');}catch(e){return null;}}
 async function ensureSyncSession(cfg){let session=getSyncSession();if(!session?.access_token)return null;const expiry=Number(session.expires_at||0);if(expiry&&expiry>Date.now()/1000+90)return session;if(!session.refresh_token)return session;const r=await fetch(cfg.url.replace(/\/$/,'')+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:cfg.key,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:session.refresh_token})});if(!r.ok)return session;session=await r.json();localStorage.setItem(SESSION_KEY,JSON.stringify(session));return session;}
-function setSyncStatus(msg,ok=false){const el=$('#syncStatus');if(el){el.textContent=msg;el.classList.toggle('sync-ok',ok);}}
-function applyState(data){items=data.items||[];kits=data.kits||[];travel=data.travel||[];loans=data.loans||[];movements=data.movements||[];owners=data.owners||[];stateUpdatedAt=data.updatedAt||new Date().toISOString();idb.set('state',{items,kits,travel,loans,movements,owners,updatedAt:stateUpdatedAt}).catch(()=>{});render();refreshLoanOptions();}
+function setSyncStatus(msg,ok=false){const el=$('#syncStatus');if(el){el.textContent=msg;el.classList.toggle('sync-ok',ok);}
+  const tag=document.querySelector('.local-tag');if(tag){const cfgOk=!!getSyncConfig().url;tag.lastChild.textContent=' '+(ok?'SYNCHRO ✓ '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):!cfgOk?'MODE LOCAL':!navigator.onLine?'HORS LIGNE':'SYNCHRO À VÉRIFIER');tag.title=msg;}}
+const LAST_SYNC_KEY='caverne_alibaab_last_synced';
+function markSynced(iso){try{localStorage.setItem(LAST_SYNC_KEY,iso);}catch(e){}}
+function mergeStates(local,remote){
+  // Fusion élément par élément (id), le plus récemment modifié (_u) gagne ; rien n'est perdu côté ajouts.
+  const lt=Date.parse(local.updatedAt||0)||0,rt=Date.parse(remote.updatedAt||0)||0,out={};
+  for(const c of SYNC_COLLECTIONS){const map=new Map(),order=[];
+    for(const x of remote[c]||[]){const k=stampKey(c,x);map.set(k,x);order.push(k);}
+    for(const x of local[c]||[]){const k=stampKey(c,x);
+      if(!map.has(k)){map.set(k,x);order.push(k);continue;}
+      const r=map.get(k),lu=Date.parse(x?._u||0)||0,ru=Date.parse(r?._u||0)||0;
+      if(lu>ru||(lu===ru&&lt>=rt))map.set(k,x);}
+    out[c]=order.map(k=>map.get(k));}
+  out.updatedAt=new Date().toISOString();return out;
+}
+let syncBusy=false;
+function applyState(data){items=data.items||[];kits=data.kits||[];travel=data.travel||[];loans=data.loans||[];movements=data.movements||[];owners=data.owners||[];stateUpdatedAt=data.updatedAt||new Date().toISOString();seedStampSigs();idb.set('state',{items,kits,travel,loans,movements,owners,updatedAt:stateUpdatedAt}).catch(()=>{});render();refreshLoanOptions();}
 function snapshot(){return {items,kits,travel,loans,movements,owners,updatedAt:stateUpdatedAt};}
 async function syncNow(direction='auto'){
+  if(direction==='auto'){if(syncBusy)return;syncBusy=true;try{await syncCore(direction);}finally{syncBusy=false;}return;}
+  return syncCore(direction);
+}
+async function syncCore(direction){
   const cfg=getSyncConfig(); if(!cfg.url||!cfg.key){setSyncStatus('Configure Supabase pour activer la synchronisation.');return;}
   const base=cfg.url.replace(/\/$/,'')+'/rest/v1/caverne_state';
   let session=await ensureSyncSession(cfg); if(!session?.access_token){setSyncStatus('Connecte-toi au compte Supabase sur cet appareil.');return;}
@@ -705,18 +735,29 @@ async function syncNow(direction='auto'){
       const r=await fetch(base,{method:'POST',headers,body:JSON.stringify({owner_id:session.user.id,payload:local,updated_at:local.updatedAt})});if(!r.ok)throw Error('Écriture Supabase : HTTP '+r.status);
       setSyncStatus('Synchronisation envoyée avec succès.',true);return;
     }
-    if(remote&&remote.payload){const rt=Date.parse(remote.payload.updatedAt||remote.updated_at||0),lt=Date.parse(local.updatedAt||0);if(rt>lt){applyState(remote.payload);setSyncStatus('Version en ligne récupérée.',true);return;}if(rt===lt){setSyncStatus('Déjà synchronisé · '+new Date().toLocaleTimeString('fr-FR'),true);return;}}
-    const r=await fetch(base,{method:'POST',headers,body:JSON.stringify({owner_id:session.user.id,payload:local,updated_at:local.updatedAt})});if(!r.ok)throw Error('Écriture Supabase : HTTP '+r.status);
-    setSyncStatus('Synchronisé · '+new Date().toLocaleTimeString('fr-FR'),true);
-  }catch(err){setSyncStatus('Synchronisation impossible : '+err.message);}
+    const pushState=async(state)=>{const r=await fetch(base,{method:'POST',headers,body:JSON.stringify({owner_id:session.user.id,payload:state,updated_at:state.updatedAt})});if(!r.ok)throw Error('Écriture Supabase : HTTP '+r.status);markSynced(state.updatedAt);};
+    const ls=Date.parse(localStorage.getItem(LAST_SYNC_KEY)||0)||0,lt=Date.parse(local.updatedAt||0)||0;
+    if(remote&&remote.payload){
+      const rp=remote.payload,rt=Date.parse(rp.updatedAt||remote.updated_at||0)||0;
+      if(!(local.items||[]).length&&(rp.items||[]).length){applyState(rp);markSynced(rp.updatedAt||remote.updated_at);setSyncStatus('Données récupérées depuis Supabase.',true);return;} // jamais écraser le cloud avec un appareil vide
+      if(rt===lt){markSynced(local.updatedAt);setSyncStatus('Synchronisé',true);return;}
+      if(rt>ls&&lt>ls){const merged=mergeStates(local,rp);applyState(merged);await pushState(snapshot());setSyncStatus('Modifications des deux appareils fusionnées',true);return;}
+      if(rt>lt){applyState(rp);markSynced(rp.updatedAt||remote.updated_at);setSyncStatus('Version en ligne récupérée',true);return;}
+    }
+    await pushState(local);setSyncStatus('Synchronisé',true);
+  }catch(err){setSyncStatus(navigator.onLine?'Synchronisation impossible : '+err.message:'Hors ligne : la synchro reprendra automatiquement.');}
 }
 $('#saveSyncConfig').onclick=()=>{const url=$('#supabaseUrl').value.trim(),key=$('#supabaseKey').value.trim();if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)||!key){alert('Vérifie l’URL du projet et la clé anon/public.');return;}localStorage.setItem(SYNC_KEY,JSON.stringify({url,key}));setSyncStatus('Projet enregistré. Connecte-toi avec ton compte partagé.');};
 $('#syncPush').onclick=()=>syncNow('push');$('#syncPull').onclick=()=>syncNow('pull');$('#syncNow').onclick=()=>syncNow('auto');
 async function authSupabase(mode){const cfg=getSyncConfig();if(!cfg.url||!cfg.key){alert('Enregistre d’abord l’URL et la clé Supabase.');return;}const email=$('#syncEmail').value.trim(),password=$('#syncPassword').value;if(!email||!password){alert('Saisis ton e-mail et ton mot de passe.');return;}try{const endpoint=mode==='signup'?'/auth/v1/signup':'/auth/v1/token?grant_type=password';const r=await fetch(cfg.url.replace(/\/$/,'')+endpoint,{method:'POST',headers:{apikey:cfg.key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});const data=await r.json();if(!r.ok)throw Error(data.msg||data.message||data.error_description||'Authentification refusée');if(data.access_token){localStorage.setItem(SESSION_KEY,JSON.stringify(data));setSyncStatus('Connecté : '+email,true);await syncNow('auto');}else setSyncStatus('Compte créé. Vérifie ton e-mail si la confirmation est activée.');}catch(err){setSyncStatus('Connexion impossible : '+err.message);}}
 $('#syncSignUp').onclick=()=>authSupabase('signup');$('#syncSignIn').onclick=()=>authSupabase('signin');$('#syncSignOut').onclick=()=>{localStorage.removeItem(SESSION_KEY);setSyncStatus('Déconnecté de Supabase.');};
 const syncCfg=getSyncConfig();if($('#supabaseUrl'))$('#supabaseUrl').value=syncCfg.url||'';if($('#supabaseKey'))$('#supabaseKey').value=syncCfg.key||'';
-window.addEventListener('online',()=>syncNow('auto'));window.addEventListener('focus',()=>{if(getSyncConfig().url)syncNow('auto');});
-setInterval(()=>{if(getSyncConfig().url&&navigator.onLine)syncNow('auto');},60000);
+window.addEventListener('online',()=>syncNow('auto'));window.addEventListener('offline',()=>setSyncStatus('Hors ligne : la synchro reprendra automatiquement.'));
+window.addEventListener('focus',()=>{if(getSyncConfig().url)syncNow('auto');});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&getSyncConfig().url)syncNow('auto');else if(document.visibilityState==='hidden'&&getSyncConfig().url&&navigator.onLine){clearTimeout(syncTimer);syncNow('auto');}});
+window.addEventListener('pagehide',()=>{if(getSyncConfig().url&&navigator.onLine)syncNow('auto');});
+setInterval(()=>{if(document.visibilityState==='visible'&&getSyncConfig().url&&navigator.onLine)syncNow('auto');},20000);
+setTimeout(()=>{if(getSyncConfig().url)syncNow('auto');else setSyncStatus('Configure Supabase pour activer la synchronisation.');},1500);
 // ---------- online loan request portal ----------
 function portalHeaders(session){return {'apikey':getSyncConfig().key,'Authorization':'Bearer '+session.access_token,'Content-Type':'application/json','Accept':'application/json','Prefer':'return=representation'};}
 function portalStatusLabel(s){return ({pending:'En attente',approved:'Acceptée',rejected:'Refusée',changes_requested:'Modification proposée',cancelled:'Annulée'})[s]||s;}
