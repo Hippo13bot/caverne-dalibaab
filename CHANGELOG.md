@@ -1,4 +1,4 @@
-## 1.9.1 — QR kits + caméra iPhone
+## 1.9.2 — QR kits + caméra iPhone
 - Les sacs et kits utilisent désormais un QR code dédié, affiché et imprimable depuis leur fiche. Les anciens identifiants Code 128 restent acceptés au scan pour compatibilité.
 - Scanner caméra : commandes de zoom, flash et mise au point continue lorsque le navigateur et l’objectif les exposent.
 - Retour sonore et vibration existants conservés ; lecteur externe Bluetooth/Wi-Fi HID reste compatible.

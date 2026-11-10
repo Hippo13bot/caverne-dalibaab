@@ -377,6 +377,7 @@ $('#printQRBtn')?.addEventListener('click',()=>{const w=window.open('','_blank')
 // ---------- tabs ----------
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b===t));
+  document.body.classList.toggle('view-inventory',t.dataset.view==='inventory');
   $('#inventoryView').hidden=t.dataset.view!=='inventory';
   $('#kitsView').hidden=t.dataset.view!=='kits';
   $('#tournoisView').hidden=t.dataset.view!=='tournois';
