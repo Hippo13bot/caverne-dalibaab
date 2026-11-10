@@ -1,6 +1,7 @@
 ## 1.9.0 — QR objet + QR anti-perte
 
 - Mise en page des étiquettes : QR à gauche, texte à droite. Étiquette 1 = gros QR + nom de l'objet, plus le hashtag de l'exemplaire seulement s'il y a plusieurs quantités. Étiquette 2 = QR anti-perte (correction d'erreur L, moins dense) + nom, référence et bandeau « SCANNEZ SI PERDU ». Taille de police ajustée automatiquement. L'impression via fenêtre utilise exactement le même rendu que l'imprimante.
+- QR anti-perte plus facile à lire : adresse courte `c.html?CODE` (nouvelle page `src/c.html`, redirige vers `contact.html`), correction d'erreur L, et modules de 3 points au lieu de 2 quand l'URL fait 53 caractères ou moins (QR ≈ 32 % plus grand). Les anciens liens `contact.html?i=` et `?id=` continuent de fonctionner.
 - Bouton « Copier public-config.js » dans la fenêtre Étiquettes ; message explicite si les QR courts ne sont pas encore activés.
 - Plus de code-barres : l'étiquette 1 est un seul gros QR noir sur fond blanc, sans texte, qui encode une référence courte `CA-XXXXXXXX` (11 caractères → QR version 1, 21 × 21 modules, module de 4 points sur la tête native 96 points).
 - Étiquette 2 inchangée dans son principe : QR anti-perte vers la page publique commune `contact.html?i=XXXXXXXX`, nom de l'objet (jamais la marque), référence courte et « SCANNEZ SI PERDU ».

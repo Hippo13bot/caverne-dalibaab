@@ -257,7 +257,7 @@ async function publishOwnerQrLabels(labels){
   const response=await fetch(url,{method:'POST',headers:{apikey:cfg.key,Authorization:'Bearer '+session.access_token,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
   if(!response.ok)throw Error('Publication Supabase impossible (HTTP '+response.status+'). Vérifie que docs/ETIQUETTES-QR.sql a été exécuté.');
   const publicCfg=window.CAVERNE_PUBLIC_CONFIG||{};const compact=String(publicCfg.supabaseUrl||'').replace(/\/$/,'')===cfg.url.replace(/\/$/,'')&&String(publicCfg.supabaseAnonKey||'')===cfg.key;
-  labels.forEach(({unit})=>{unit.publicUrl=compact?base+'/contact.html?i='+encodeURIComponent(unit.publicCode):base+'/contact.html?id='+encodeURIComponent(unit.token)+'&project='+encodeURIComponent(cfg.url)+'&key='+encodeURIComponent(cfg.key);});
+  labels.forEach(({unit})=>{unit.publicUrl=compact?base+'/c.html?'+encodeURIComponent(unit.publicCode):base+'/contact.html?id='+encodeURIComponent(unit.token)+'&project='+encodeURIComponent(cfg.url)+'&key='+encodeURIComponent(cfg.key);});
   persistAll(); return labels;
 }
 async function printSelectedBarcodeLabels(){
@@ -306,7 +306,7 @@ $('#copyPublicConfig')?.addEventListener('click',async()=>{
   const cfg=getSyncConfig();if(!cfg.url||!cfg.key)return alert('Configure d’abord Supabase dans Exports & impressions.');
   try{const role=JSON.parse(atob(cfg.key.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).role;if(role==='service_role')return alert('Cette clé est une clé service_role : ne la publie jamais. Utilise la clé anon / publishable.');}catch(e){}
   const text="/* Configuration publique du portail anti-perte (clé anon/publishable uniquement). */\nwindow.CAVERNE_PUBLIC_CONFIG = {\n  supabaseUrl: '"+cfg.url.replace(/\/$/,'')+"',\n  supabaseAnonKey: '"+cfg.key+"'\n};\n";
-  try{await navigator.clipboard.writeText(text);$('#ficheroPrinterStatus').textContent='Contenu de public-config.js copié : colle-le dans src/public-config.js sur GitHub.';}
+  try{await navigator.clipboard.writeText(text);{const b=(localStorage.getItem('caverne_portal_base')||$('#portalBaseUrl')?.value||'').trim().replace(/\/$/,'');const n=b?(b+'/c.html?K7M2XP9Q').length:0;$('#ficheroPrinterStatus').textContent='Contenu de public-config.js copié : colle-le dans src/public-config.js sur GitHub.'+(n?' URL du QR anti-perte : '+n+' caractères'+(n<=53?' → gros modules, lecture très facile.':' → lecture correcte ; sous 54 caractères le QR devient plus gros (adresse GitHub Pages plus courte).'):'');}}
   catch(e){prompt('Copie ce contenu dans src/public-config.js :',text);}
 });
 

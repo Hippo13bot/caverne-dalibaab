@@ -127,12 +127,11 @@
       const value = String(label.unit?.publicUrl || '');
       if (!value) throw new Error('URL publique absente. Publie d’abord la fiche anti-perte.');
       const qr = makeQr(value, 1); // correction d'erreur L : QR le moins dense possible
-      const count = qr.getModuleCount(); let quiet = 4;
-      while (quiet > 2 && (count + 2 * quiet) * 2 > LH) quiet--;
-      const total = (count + quiet * 2) * 2;
-      if (total > LH) throw new Error('QR anti-perte trop dense pour le rouleau 30 × 14 mm (' + count + ' modules). Active les QR courts : voir docs/UPGRADE-1.9.0.md.');
-      const qx = Math.floor((LH - total) / 2);
-      drawQr(ctx, qr, qx + quiet * 2, qx + quiet * 2, 2);
+      const count = qr.getModuleCount();
+      let module = 3; while (module > 2 && (count + 2) * module > LH) module--; // modules de 3 points si l'URL est assez courte, sinon 2
+      if ((count + 2) * module > LH) throw new Error('QR anti-perte trop dense pour le rouleau 30 × 14 mm (' + count + ' modules). Active les QR courts : voir docs/UPGRADE-1.9.0.md.');
+      const quiet = Math.min(4, Math.floor((LH / module - count) / 2)), total = (count + quiet * 2) * module, qx = Math.floor((LH - total) / 2);
+      drawQr(ctx, qr, qx + quiet * module, qx + quiet * module, module);
       const x0 = LH + 2, maxW = LW - x0 - 4, top = 5, area = LH - 10;
       const refFit = fitText(ctx, 'Réf. ' + String(label.unit?.tag || label.unit?.publicCode || ''), { maxW, maxLines: 1, maxH: 16, sizes: [13, 12, 11, 10, 9] });
       const footFit = fitText(ctx, 'SCANNEZ SI PERDU', { maxW: maxW - 6, maxLines: 1, maxH: 18, sizes: [14, 13, 12, 11, 10, 9] });
